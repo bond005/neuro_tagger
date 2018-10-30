@@ -1,30 +1,31 @@
 import copy
+import gc
 import math
 import os
+import re
 import tempfile
 from typing import List, Tuple, Union
 
 from keras_contrib.layers import CRF
 import keras.backend as K
-from keras.layers import LSTM, Masking, Bidirectional, TimeDistributed, Dense
-from keras.models import Sequential
+from keras.layers import Input, LSTM, Masking, Bidirectional, TimeDistributed, Dense
+from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import print_summary
+from nltk.tokenize.nist import NISTTokenizer
 import numpy as np
 from sklearn.base import ClassifierMixin, BaseEstimator
 from sklearn.metrics import f1_score
 from sklearn.utils.validation import check_is_fitted
-import spacy
 import tensorflow as tf
 import tensorflow_hub as hub
 
 
 class NeuroTagger(ClassifierMixin, BaseEstimator):
-    def __init__(self, elmo_name: str, spacy_lang_name: str, n_units: int, dropout: float, recurrent_dropout: float,
-                 l2_kernel: float, l2_chain: float, n_epochs: int, validation_part: float, batch_size: int,
-                 use_lstm: bool, use_crf: bool, verbose: Union[int, bool]):
+    def __init__(self, elmo_name: str, n_units: int, dropout: float, recurrent_dropout: float, l2_kernel: float,
+                 l2_chain: float, n_epochs: int, validation_part: float, batch_size: int, use_lstm: bool, use_crf: bool,
+                 verbose: Union[int, bool]):
         self.elmo_name = elmo_name
-        self.spacy_lang_name = spacy_lang_name
         self.n_units = n_units
         self.dropout = dropout
         self.recurrent_dropout = recurrent_dropout
@@ -44,8 +45,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             if hasattr(self, 'classifier_'):
                 del self.classifier_
             K.clear_session()
-        if hasattr(self, 'spacy_nlp_'):
-            del self.spacy_nlp_
+        if hasattr(self, 'tokenizer_'):
+            del self.tokenizer_
 
     def fit(self, X: Union[list, tuple, np.ndarray], y: Union[list, tuple, np.ndarray]):
         self.check_params(**self.get_params(deep=False))
@@ -54,6 +55,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.update_elmo()
         X_tokenized = self.tokenize(X)
         self.max_text_len_ = max(map(lambda idx: len(X_tokenized[idx]), range(len(X_tokenized))))
+        K.get_session()
         X_ = self.texts_to_X(X, X_tokenized, self.max_text_len_)
         y_ = self.labels_to_y(X, y, X_tokenized, self.max_text_len_)
         indices = np.arange(0, X_.shape[0], dtype=np.int32)
@@ -73,26 +75,32 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         del X_
         del y_
         self.embedding_size_ = X_train.shape[2]
-        self.classifier_ = Sequential()
-        self.classifier_.add(Masking(mask_value=0.0, input_shape=(self.max_text_len_, self.embedding_size_)))
+        nn_input = Input(shape=(self.max_text_len_, self.embedding_size_), name='input_of_tagger')
+        nn_output = Masking(mask_value=0.0, input_shape=(self.max_text_len_, self.embedding_size_),
+                            name='masking_layer')(nn_input)
         if self.use_lstm:
-            self.classifier_.add(Bidirectional(LSTM(self.n_units, return_sequences=True, dropout=self.dropout,
-                                                    recurrent_dropout=self.recurrent_dropout), merge_mode='ave'))
+            nn_output = Bidirectional(LSTM(self.n_units, return_sequences=True, dropout=self.dropout,
+                                           recurrent_dropout=self.recurrent_dropout, name='lstm_layer'),
+                                      merge_mode='ave', name='BiLSTM_layer')(nn_output)
             if self.use_crf:
                 crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                           kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
-                          chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None))
-                self.classifier_.add(crf)
+                          chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None), name='crf_layer')
+                nn_output = crf(nn_output)
+                self.classifier_ = Model(nn_input, nn_output)
                 self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
             else:
-                self.classifier_.add(TimeDistributed(Dense(len(self.named_entities_) * 2 + 1, activation='softmax')))
+                nn_output = TimeDistributed(Dense(len(self.named_entities_) * 2 + 1, activation='softmax',
+                                                  name='dense_layer'), name='time_distr')(nn_output)
+                self.classifier_ = Model(nn_input, nn_output)
                 self.classifier_.compile(optimizer='rmsprop', loss='categorical_crossentropy',
                                          metrics=['categorical_accuracy'])
         else:
             crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                       kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
-                      chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None))
-            self.classifier_.add(crf)
+                      chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None), name='crf_layer')
+            nn_output = crf(nn_output)
+            self.classifier_ = Model(nn_input, nn_output)
             self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
         if self.verbose:
             print_summary(self.classifier_)
@@ -111,8 +119,15 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     self.classifier_.train_on_batch(X_batch, y_batch)
                     del X_batch, y_batch
                 epoch_idx += 1
-                y_pred = self.classifier_.predict(X_test, batch_size=self.batch_size)
-                cur_f1 = self.f1_macro(y_test, y_pred,
+                y_pred = None
+                for X_batch in self.generate_batches(X_test, None, self.batch_size, shuffle=False):
+                    y_batch = self.classifier_.predict_on_batch(X_batch)
+                    if y_pred is None:
+                        y_pred = y_batch.copy()
+                    else:
+                        y_pred = np.vstack((y_pred, y_batch))
+                    del X_batch, y_batch
+                cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]],
                                        [len(X_tokenized_test[idx]) for idx in range(len(X_tokenized_test))])
                 del y_pred
                 if best_f1 is None:
@@ -149,8 +164,16 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         check_is_fitted(self, ['classifier_', 'named_entities_', 'max_text_len_', 'embedding_size_'])
         self.update_elmo()
         X_tokenized = self.tokenize(X)
-        y = np.argmax(self.classifier_.predict(self.texts_to_X(X, X_tokenized, self.max_text_len_),
-                                               batch_size=self.batch_size), axis=-1)
+        y = None
+        for X_batch in self.generate_batches(self.texts_to_X(X, X_tokenized, self.max_text_len_), None,
+                                             self.batch_size, shuffle=False):
+            y_batch = self.classifier_.predict_on_batch(X_batch)
+            if y is None:
+                y = y_batch.copy()
+            else:
+                y = np.vstack((y, y_batch))
+            del X_batch, y_batch
+        y = np.argmax(y[:len(X)], axis=-1)
         res = []
         for text_idx in range(y.shape[0]):
             ne_token_start = -1
@@ -201,25 +224,36 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.update_elmo()
         X_tokenized = self.tokenize(X)
         y_true = self.labels_to_y(X, y, X_tokenized, self.max_text_len_)
-        y_pred = self.classifier_.predict(self.texts_to_X(X, X_tokenized, self.max_text_len_),
-                                          batch_size=self.batch_size)
-        return self.f1_macro(y_true, y_pred, [len(X_tokenized[idx]) for idx in range(len(X_tokenized))])
+        y_pred = None
+        for X_batch in self.generate_batches(self.texts_to_X(X, X_tokenized, self.max_text_len_), None, self.batch_size,
+                                             shuffle=False):
+            y_batch = self.classifier_.predict_on_batch(X_batch)
+            if y_pred is None:
+                y_pred = y_batch.copy()
+            else:
+                y_pred = np.vstack((y_pred, y_batch))
+            del X_batch, y_batch
+        return self.f1_macro(y_true, y_pred[:y_true.shape[0]],
+                             [len(X_tokenized[idx]) for idx in range(len(X_tokenized))])
 
     def tokenize(self, X: Union[list, tuple, np.ndarray]) -> List[tuple]:
-        self.update_spacy_nlp()
+        self.update_tokenizer()
         token_bounds_in_texts = []
         doc_idx = 0
-        for doc in self.spacy_nlp_.pipe(map(lambda idx: X[idx], range(len(X))), batch_size=self.batch_size,
-                                        n_threads=os.cpu_count()):
-            token_bounds_in_texts.append(tuple(
-                filter(
-                    lambda bounds: (bounds is not None) and (len(bounds) == 2),
-                    map(
-                        lambda token: self.strip_token_bounds(X[doc_idx], token.idx, len(token.text)),
-                        filter(lambda it: not it.is_space, doc)
-                    )
-                )
-            ))
+        for idx in range(len(X)):
+            token_bounds_in_cur_text = []
+            start_pos = 0
+            for cur_token in self.tokenizer_.international_tokenize(X[idx]):
+                found_pos = X[idx].find(cur_token, start_pos)
+                if found_pos < 0:
+                    raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
+                search_res = self.re_for_token_.search(cur_token)
+                if search_res is not None:
+                    if (search_res.start() >= 0) and (search_res.end() >= 0):
+                        token_bounds_in_cur_text.append((found_pos, len(cur_token)))
+                start_pos = found_pos + len(cur_token)
+            token_bounds_in_texts.append(tuple(token_bounds_in_cur_text))
+            del token_bounds_in_cur_text
             doc_idx += 1
         return token_bounds_in_texts
 
@@ -228,48 +262,47 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         X = None
         embedding_size = None
         n_batches = int(math.ceil(len(texts) / float(self.batch_size)))
-        with tf.Session() as sess:
-            tokens_ph = tf.placeholder(shape=(None, None), dtype=tf.string, name='tokens')
-            tokens_length_ph = tf.placeholder(shape=(None,), dtype=tf.int32, name='tokens_length')
-            embeddings_of_texts = self.elmo_(
-                inputs={
-                    'tokens': tokens_ph,
-                    'sequence_len': tokens_length_ph
-                },
-                signature='tokens',
-                as_dict=True
-            )['elmo']
-            sess.run(tf.global_variables_initializer())
-            sess.run(tf.tables_initializer())
-            for batch_idx in range(n_batches):
-                start_pos = batch_idx * self.batch_size
-                end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
-                texts_in_batch = []
-                lengths_of_texts = []
-                for text_idx in range(start_pos, end_pos):
-                    new_text = [texts[text_idx][token_bounds[0]:(token_bounds[0] + token_bounds[1])]
-                                for token_bounds in token_bounds_in_all_texts[text_idx]]
-                    if len(new_text) > max_text_len:
-                        new_text = new_text[:max_text_len]
-                    lengths_of_texts.append(len(new_text))
-                    while len(new_text) < max_text_len:
-                        new_text.append('')
-                    texts_in_batch.append(new_text)
-                embeddings_of_texts_as_numpy = sess.run(
-                    embeddings_of_texts,
-                    feed_dict={
-                        tokens_ph: texts_in_batch,
-                        tokens_length_ph: lengths_of_texts
-                    }
-                )
-                if embedding_size is None:
-                    embedding_size = embeddings_of_texts_as_numpy.shape[2]
-                if X is None:
-                    X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
-                for idx in range(end_pos - start_pos):
-                    text_idx = start_pos + idx
-                    for token_idx in range(min(max_text_len, len(token_bounds_in_all_texts[text_idx]))):
-                        X[text_idx][token_idx] = embeddings_of_texts_as_numpy[idx][token_idx]
+        sess = K.get_session()
+        tokens_ph = tf.placeholder(shape=(None, None), dtype=tf.string, name='tokens')
+        tokens_length_ph = tf.placeholder(shape=(None,), dtype=tf.int32, name='tokens_length')
+        embeddings_of_texts = self.elmo_(
+            inputs={
+                'tokens': tokens_ph,
+                'sequence_len': tokens_length_ph
+            },
+            signature='tokens',
+            as_dict=True
+        )['elmo']
+        for batch_idx in range(n_batches):
+            start_pos = batch_idx * self.batch_size
+            end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
+            texts_in_batch = []
+            lengths_of_texts = []
+            for text_idx in range(start_pos, end_pos):
+                new_text = [texts[text_idx][token_bounds[0]:(token_bounds[0] + token_bounds[1])]
+                            for token_bounds in token_bounds_in_all_texts[text_idx]]
+                if len(new_text) > max_text_len:
+                    new_text = new_text[:max_text_len]
+                lengths_of_texts.append(len(new_text))
+                while len(new_text) < max_text_len:
+                    new_text.append('')
+                texts_in_batch.append(new_text)
+            embeddings_of_texts_as_numpy = sess.run(
+                embeddings_of_texts,
+                feed_dict={
+                    tokens_ph: texts_in_batch,
+                    tokens_length_ph: lengths_of_texts
+                }
+            )
+            if embedding_size is None:
+                embedding_size = embeddings_of_texts_as_numpy.shape[2]
+            if X is None:
+                X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
+            for idx in range(end_pos - start_pos):
+                text_idx = start_pos + idx
+                for token_idx in range(min(max_text_len, len(token_bounds_in_all_texts[text_idx]))):
+                    X[text_idx][token_idx] = embeddings_of_texts_as_numpy[idx][token_idx]
+            del embeddings_of_texts_as_numpy, texts_in_batch, lengths_of_texts
         return X
 
     def labels_to_y(self, texts: Union[list, tuple, np.ndarray], labels: Union[list, tuple, np.ndarray],
@@ -292,20 +325,21 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     y[text_idx, token_idx, 0] = 0.0
         return y
 
-    def update_spacy_nlp(self):
-        if not hasattr(self, 'spacy_nlp_'):
-            self.spacy_nlp_ = spacy.load(self.spacy_lang_name, disable=['parser', 'tagger', 'ner'])
+    def update_tokenizer(self):
+        if not hasattr(self, 'tokenizer_'):
+            self.tokenizer_ = NISTTokenizer()
+        if not hasattr(self, 're_for_token_'):
+            self.re_for_token_ = re.compile('\w+', re.U)
 
     def update_elmo(self):
         if not hasattr(self, 'elmo_'):
             self.elmo_ = hub.Module(self.elmo_name, trainable=True)
 
     def get_params(self, deep=True):
-        return {'elmo_name': self.elmo_name, 'spacy_lang_name': self.spacy_lang_name, 'n_units': self.n_units,
-                'dropout': self.dropout, 'recurrent_dropout': self.recurrent_dropout, 'l2_kernel': self.l2_kernel,
-                'l2_chain': self.l2_chain, 'n_epochs': self.n_epochs, 'validation_part': self.validation_part,
-                'verbose': self.verbose, 'batch_size': self.batch_size, 'use_lstm': self.use_lstm,
-                'use_crf': self.use_crf}
+        return {'elmo_name': self.elmo_name, 'n_units': self.n_units, 'dropout': self.dropout,
+                'recurrent_dropout': self.recurrent_dropout, 'l2_kernel': self.l2_kernel, 'l2_chain': self.l2_chain,
+                'n_epochs': self.n_epochs, 'validation_part': self.validation_part, 'verbose': self.verbose,
+                'batch_size': self.batch_size, 'use_lstm': self.use_lstm, 'use_crf': self.use_crf}
 
     def set_params(self, **params):
         for parameter, value in params.items():
@@ -320,29 +354,41 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         try:
             with open(tmp_weights_name, 'wb') as fp:
                 fp.write(weights_of_classifier)
-            self.classifier_ = Sequential()
-            self.classifier_.add(Masking(mask_value=0.0, input_shape=(self.max_text_len_, self.embedding_size_)))
+            nn_input = Input(shape=(self.max_text_len_, self.embedding_size_), name='input_of_tagger')
+            nn_output = Masking(mask_value=0.0, input_shape=(self.max_text_len_, self.embedding_size_),
+                                name='masking_layer')(nn_input)
             if self.use_lstm:
-                self.classifier_.add(Bidirectional(LSTM(self.n_units, return_sequences=True, dropout=self.dropout,
-                                                        recurrent_dropout=self.recurrent_dropout), merge_mode='ave'))
+                nn_output = Bidirectional(LSTM(self.n_units, return_sequences=True, dropout=self.dropout,
+                                               recurrent_dropout=self.recurrent_dropout, name='lstm_layer'),
+                                          merge_mode='ave', name='BiLSTM_layer')(nn_output)
                 if self.use_crf:
                     crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                               kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
-                              chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None))
-                    self.classifier_.add(crf)
+                              chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None),
+                              name='crf_layer')
+                    nn_output = crf(nn_output)
+                    self.classifier_ = Model(nn_input, nn_output)
+                    self.classifier_.load_weights(tmp_weights_name)
                     self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
                 else:
-                    self.classifier_.add(
-                        TimeDistributed(Dense(len(self.named_entities_) * 2 + 1, activation='softmax')))
+                    nn_output = TimeDistributed(Dense(len(self.named_entities_) * 2 + 1,
+                                                      activation='softmax', name='dense_layer'),
+                                                name='time_distr')(nn_output)
+                    self.classifier_ = Model(nn_input, nn_output)
+                    self.classifier_.load_weights(tmp_weights_name)
                     self.classifier_.compile(optimizer='rmsprop', loss='categorical_crossentropy',
                                              metrics=['categorical_accuracy'])
             else:
                 crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                           kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
-                          chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None))
-                self.classifier_.add(crf)
+                          chain_regularizer=(l2(self.l2_chain) if self.l2_chain > 0.0 else None), name='crf_layer')
+                nn_output = crf(nn_output)
+                self.classifier_ = Model(nn_input, nn_output)
+                self.classifier_.load_weights(tmp_weights_name)
                 self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
-            self.classifier_.load_weights(tmp_weights_name)
+            self.classifier_._make_predict_function()
+            self.classifier_._make_test_function()
+            self.classifier_._make_train_function()
         finally:
             if os.path.isfile(tmp_weights_name):
                 os.remove(tmp_weights_name)
@@ -380,9 +426,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         if not isinstance(new_params, dict):
             raise ValueError('`new_params` is wrong! Expected `{0}`, got `{1}`.'.format(type({0: 1}), type(new_params)))
         self.check_params(**new_params)
-        expected_param_keys = {'elmo_name', 'spacy_lang_name', 'n_units', 'dropout', 'recurrent_dropout', 'l2_kernel',
-                               'l2_chain', 'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf',
-                               'use_lstm'}
+        expected_param_keys = {'elmo_name', 'n_units', 'dropout', 'recurrent_dropout', 'l2_kernel', 'l2_chain',
+                               'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf', 'use_lstm'}
         params_after_training = {'weights', 'named_entities_', 'max_text_len_', 'embedding_size_'}
         is_fitted = len(set(new_params.keys())) > len(expected_param_keys)
         if is_fitted:
@@ -390,7 +435,6 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 raise ValueError('`new_params` does not contain all expected keys!')
         self.batch_size = new_params['batch_size']
         self.elmo_name = new_params['elmo_name']
-        self.spacy_lang_name = new_params['spacy_lang_name']
         self.n_units = new_params['n_units']
         self.dropout = new_params['dropout']
         self.recurrent_dropout = new_params['recurrent_dropout']
@@ -410,18 +454,19 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             if not isinstance(new_params['max_text_len_'], int):
                 raise ValueError('`max_text_len_` is wrong! Expected `{0}`, got `{1}`.'.format(
                     type(2), type(new_params['max_text_len_'])))
-            if len(new_params['max_text_len_']) < 1:
+            if new_params['max_text_len_'] < 1:
                 raise ValueError('`max_text_len_` is wrong! Expected a positive integer value, but {0} is not '
                                  'positive.'.format(new_params['max_text_len_']))
             if not isinstance(new_params['embedding_size_'], int):
                 raise ValueError('`embedding_size_` is wrong! Expected `{0}`, got `{1}`.'.format(
                     type(2), type(new_params['embedding_size_'])))
-            if len(new_params['embedding_size_']) < 1:
+            if new_params['embedding_size_'] < 1:
                 raise ValueError('`embedding_size_` is wrong! Expected a positive integer value, but {0} is not '
                                  'positive.'.format(new_params['embedding_size_']))
             self.named_entities_ = new_params['named_entities_']
             self.max_text_len_ = new_params['max_text_len_']
             self.embedding_size_ = new_params['embedding_size_']
+            K.get_session()
             self.load_weights(new_params['weights'])
         return self
 
@@ -514,15 +559,19 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         return f1 / float(y_true.shape[2] - 1)
 
     @staticmethod
-    def generate_batches(X: np.ndarray, y: np.ndarray, batch_size: int):
+    def generate_batches(X: np.ndarray, y: Union[np.ndarray, None], batch_size: int, shuffle: bool=True):
         n_batches = math.ceil(X.shape[0] / float(batch_size))
         indices = np.arange(0, X.shape[0], dtype=np.int32)
         if X.shape[0] < (n_batches * batch_size):
             indices = np.concatenate((indices, np.random.choice(indices, n_batches * batch_size - X.shape[0])))
-        np.random.shuffle(indices)
+        if shuffle:
+            np.random.shuffle(indices)
         for batch_idx in range(n_batches):
             indices_in_batch = indices[(batch_idx * batch_size):((batch_idx + 1) * batch_size)]
-            yield X[indices_in_batch], y[indices_in_batch]
+            if y is None:
+                yield X[indices_in_batch]
+            else:
+                yield X[indices_in_batch], y[indices_in_batch]
             del indices_in_batch
         del indices
 
