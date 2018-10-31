@@ -1,5 +1,5 @@
+import codecs
 import copy
-import gc
 import math
 import os
 import re
@@ -714,3 +714,4 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         fp.close()
         del fp
         return file_name
+

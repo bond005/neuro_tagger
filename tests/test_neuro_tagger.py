@@ -12,9 +12,11 @@ import numpy as np
 
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
+    from neuro_tagger.dataset_loading import load_dataset_from_brat
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
+    from neuro_tagger.dataset_loading import load_dataset_from_brat
 
 
 class TestNeuroTagger(unittest.TestCase):
@@ -525,6 +527,40 @@ class TestNeuroTagger(unittest.TestCase):
         true_err_msg = re.escape('`use_lstm` or `use_crf` must be True.')
         with self.assertRaisesRegex(ValueError, true_err_msg):
             self.tagger.check_params(**params)
+
+    def test_load_dataset_from_brat(self):
+        brat_data_path = os.path.join(os.path.dirname(__file__), 'testdata', 'brat')
+        true_texts = [
+            'FIG. 14-128 Superheated high-pressure hot-water requirements for 99 per-cent collection as a function of '
+            'particle size in a two-phase eductor jet scrubber. To convert gallons per 1000 cubic feet to cubic meters '
+            'per 1000 cubic meters, multiply by 0.134. [Gardenier, J. Air Pollut. Control Assoc., 24, 954 (1974).]',
+            'To  a  good  approximation,  P / T  conditions  for  LW-H-V  of  the  pure  components  in  Table 11.7  '
+            'lie  on  a  straight  line  between  Q1  and  Q2,  on  a  semilogarithmic  plot  (ln  p  vs.  1 / Ta).  '
+            'As discussed  below  in  the  Hand  Calculations  of  Hydrate  Formation  Conditions  section,  there  '
+            'is no simple way to expand the above pure lines into that for a mixture, though there are several ways '
+            'to hand-calculate LW-H-V conditions (P / T) for mixed hydrocarbon hydrate formers.',
+            'The full text of Oil & Gas Journal is available through OGJ Online, Oil & Gas Journal’s internet-based '
+            'energy information service, at http://www.ogjonline.com. For information, send an e-mail message to '
+            'webmaster@ogjonline.com.'
+        ]
+        true_labels = [
+            (
+                ('equipment', 12, 47), ('property_values', 65, 11), ('equipment', 77, 10), ('properties', 93, 8),
+                ('equipment', 124, 21), ('equipment', 146, 8), ('property_values', 167, 65)
+            ),
+            (
+                ('properties', 29, 5), ('properties', 36, 10), ('properties', 53, 6), ('equipment', 76, 10),
+                ('properties', 141, 2), ('properties', 150, 2), ('equipment', 162, 21), ('equipment', 233, 23),
+                ('properties', 262, 30), ('equipment', 294, 7), ('equipment', 353, 5), ('equipment', 375, 7),
+                ('properties', 432, 6), ('equipment', 439, 10), ('properties', 450, 45)
+            ),
+            (
+                ('equipment', 17, 9), ('equipment', 68, 9), ('equipment', 103, 6)
+            )
+        ]
+        loaded_texts, loaded_labels = load_dataset_from_brat(brat_data_path)
+        self.assertEqual(true_texts, loaded_texts)
+        self.assertEqual(true_labels, loaded_labels)
 
     def load_dataset(self, file_name: str) -> Tuple[List[str], List[tuple]]:
         texts = []

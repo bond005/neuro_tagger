@@ -1,0 +1,15 @@
+T1	properties 29 36	P / T  
+T2	properties 36 46	conditions
+T3	properties 53 59	LW-H-V
+T4	equipment 76 86	components
+T15	equipment 294 301	section
+T17	equipment 353 358	lines
+T18	equipment 375 382	mixture
+T19	properties 432 438	LW-H-V
+T20	equipment 439 449	conditions
+T21	properties 450 495	(P / T) for mixed hydrocarbon hydrate formers
+T6	properties 141 143	Q1
+T7	properties 150 152	Q2
+T23	equipment 161 183	 semilogarithmic  plot
+T11	equipment 233 256	the  Hand  Calculations
+T16	properties 262 292	Hydrate  Formation  Conditions
