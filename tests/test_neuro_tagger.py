@@ -12,11 +12,11 @@ import numpy as np
 
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
-    from neuro_tagger.dataset_loading import load_dataset_from_brat
+    from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
-    from neuro_tagger.dataset_loading import load_dataset_from_brat
+    from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
 
 
 class TestNeuroTagger(unittest.TestCase):
@@ -559,6 +559,43 @@ class TestNeuroTagger(unittest.TestCase):
             )
         ]
         loaded_texts, loaded_labels = load_dataset_from_brat(brat_data_path)
+        self.assertEqual(true_texts, loaded_texts)
+        self.assertEqual(true_labels, loaded_labels)
+
+    def test_load_dataset_from_factrueval2016(self):
+        factrueval_data_path = os.path.join(os.path.dirname(__file__), 'testdata', 'factrueval')
+        true_texts = [
+            'Встреча с послом Италии в миде Грузии',
+            'По инициативе итальянской стороны чрезвычайный и полномочный посол Италии в Грузии Виторио Сандали '
+            'встретился с заместителем министра иностранных дел Грузии Александром Налбандовым.',
+            'Предметом обсуждения стали вопросы сотрудничества в международных организациях.',
+            'Совершенно новую технологию перекачки российской водки за рубеж начали использовать контрабандисты.',
+            'Произошло это осенью 2004 года, но только сейчас эстонские власти предъявили обвинения своим и российским '
+            'гражданам, участвовавшим в этом процессе.',
+            'Таковых оказалось одиннадцать.',
+            'Пока эстонская прокуратура будет разбираться во всех тонкостях этого редкого "бизнеса", можно вспомнить '
+            'кое-что из его небольшой истории.',
+            'В августе 2004 года "продуктопровод", проложенный нелегально через пограничную реку Нарву и имеющий '
+            'общую протяжённость около двух километров, был испытан и начал функционировать.',
+            'Преступники пользовались им до ноября того же года и успели перекачать более шести тонн водки.',
+            'Но вот с её реализацией дело застопорилось, по крайней мере в Таллине, хотя в Тарту дело пошло.',
+            'В конце концов эстонская полиция наткнулась на грузовик с водкой и в ходе разбирательств вышла на '
+            '"водкопровод".'
+        ]
+        true_labels = [
+            (('LOC', 17, 6), ('ORG', 26, 11)),
+            (('LOC', 67, 6), ('LOC', 76, 6), ('PER', 83, 15), ('LOC', 150, 6), ('PER', 157, 23)),
+            tuple(),
+            tuple(),
+            tuple(),
+            tuple(),
+            tuple(),
+            (('LOC', 79, 10),),
+            tuple(),
+            (('LOC', 62, 7), ('LOC', 78, 5)),
+            tuple()
+        ]
+        loaded_texts, loaded_labels = load_dataset_from_factrueval2016(factrueval_data_path)
         self.assertEqual(true_texts, loaded_texts)
         self.assertEqual(true_labels, loaded_labels)
 
