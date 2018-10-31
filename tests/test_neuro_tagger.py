@@ -539,6 +539,14 @@ class TestNeuroTagger(unittest.TestCase):
             'As discussed  below  in  the  Hand  Calculations  of  Hydrate  Formation  Conditions  section,  there  '
             'is no simple way to expand the above pure lines into that for a mixture, though there are several ways '
             'to hand-calculate LW-H-V conditions (P / T) for mixed hydrocarbon hydrate formers.',
+            '15.1.6 Industry  Standards.    As  mentioned,  despite  the  large  number  of  installations  '
+            'world-wide,  PC  pumps  and  drive  systems  do  not,  in  general,  conform  to  any  industry  '
+            'standards  or common specifications. As a result, there is significant variation in the products '
+            'available from different vendors, which generally precludes interchangeability of equipment components. '
+            'The nomenclature  (e.g.,  naming  conventions,  ratings)  used  in  conjunction  with  both  pumps  and '
+            'drive units also varies considerably, which can make it difficult for users to easily compare and '
+            'select  products  from  different  suppliers.  Nevertheless,  there  have  been  some  recent  efforts  '
+            'to develop industry standards for PCP systems.',
             'Drums, hand-trucks, pallets, forklifts Transfer piping, hoses, pumps Transfer piping, hoses, pumps Heat '
             'sterilization prior to bagging; special heavy-duty bags with hazard warning printed on sides Fume '
             'ventilation, temperature control',
@@ -549,13 +557,18 @@ class TestNeuroTagger(unittest.TestCase):
         true_labels = [
             (
                 ('equipment', 12, 47), ('property_values', 65, 11), ('equipment', 77, 10), ('properties', 93, 8),
-                ('equipment', 124, 21), ('equipment', 146, 8), ('property_values', 167, 65)
+                ('equipment', 124, 30), ('property_values', 167, 65)
             ),
             (
-                ('properties', 29, 5), ('properties', 36, 10), ('properties', 53, 6), ('equipment', 76, 10),
-                ('properties', 141, 2), ('properties', 150, 2), ('equipment', 162, 21), ('equipment', 233, 23),
-                ('properties', 262, 30), ('equipment', 294, 7), ('equipment', 353, 5), ('equipment', 375, 7),
-                ('properties', 432, 6), ('equipment', 439, 10), ('properties', 450, 45)
+                ('properties', 29, 17), ('properties', 53, 6), ('equipment', 76, 10), ('properties', 141, 2),
+                ('properties', 150, 2), ('equipment', 162, 21), ('equipment', 233, 23), ('properties', 262, 30),
+                ('equipment', 294, 7), ('equipment', 353, 5), ('equipment', 375, 7), ('properties', 432, 6),
+                ('equipment', 439, 10), ('properties', 450, 45)
+            ),
+            (
+                ('equipment', 80, 13), ('equipment', 108, 9), ('equipment', 124, 14), ('equipment', 182, 8),
+                ('equipment', 314, 7), ('equipment', 371, 20), ('equipment', 427, 11), ('equipment', 630, 9),
+                ('properties', 710, 8), ('equipment', 733, 11)
             ),
             (
                 ('equipment', 0, 5), ('properties', 7, 11), ('equipment', 20, 7), ('equipment', 29, 25),

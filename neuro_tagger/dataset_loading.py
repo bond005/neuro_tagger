@@ -38,78 +38,89 @@ def load_annotation_from_brat(file_name: str, source_text: str) -> List[Tuple[st
             if len(prep_line) > 0:
                 err_msg = 'File "{0}": line {1} is wrong!'.format(file_name, line_idx)
                 line_parts = prep_line.split('\t')
-                if len(line_parts) != 3:
+                if len(line_parts) < 2:
                     raise ValueError(err_msg)
                 line_parts = list(filter(lambda it1: len(it1) > 0, map(lambda it2: it2.strip(), line_parts)))
-                if len(line_parts) != 3:
+                if len(line_parts) < 2:
                     raise ValueError(err_msg)
-                ne_info = list(filter(lambda it1: len(it1) > 0, map(lambda it2: it2.strip(), line_parts[1].split())))
-                if len(ne_info) < 3:
-                    raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
-                ne_type = ne_info[0].strip()
-                if ne_type == 'O':
-                    raise ValueError(err_msg + ' "{0}" is inadmissible type of named entity.'.format(ne_info[0]))
-                if len(ne_type) == 0:
-                    raise ValueError(err_msg + ' "There is empty type of named entity.')
-                min_ne_start = None
-                max_ne_end = None
-                for bounds_description in filter(lambda it2: len(it2) > 0,
-                                                 map(lambda it1: it1.strip(), ' '.join(ne_info[1:]).split(';'))):
-                    bounds_parts = bounds_description.split()
-                    if len(bounds_parts) != 2:
+                if len(line_parts) >= 3:
+                    ne_info = list(
+                        filter(lambda it1: len(it1) > 0, map(lambda it2: it2.strip(), line_parts[1].split())))
+                    if len(ne_info) < 3:
                         raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
-                    try:
-                        ne_start = int(bounds_parts[0])
-                        ne_end = int(bounds_parts[1])
-                        if (ne_start < 0) or (ne_end <= ne_start):
+                    ne_type = ne_info[0].strip()
+                    if ne_type == 'O':
+                        raise ValueError(err_msg + ' "{0}" is inadmissible type of named entity.'.format(ne_info[0]))
+                    if len(ne_type) == 0:
+                        raise ValueError(err_msg + ' "There is empty type of named entity.')
+                    min_ne_start = None
+                    max_ne_end = None
+                    for bounds_description in filter(lambda it2: len(it2) > 0,
+                                                     map(lambda it1: it1.strip(), ' '.join(ne_info[1:]).split(';'))):
+                        bounds_parts = bounds_description.split()
+                        if len(bounds_parts) != 2:
+                            raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
+                        try:
+                            ne_start = int(bounds_parts[0])
+                            ne_end = int(bounds_parts[1])
+                            if (ne_start < 0) or (ne_end <= ne_start):
+                                ne_start = None
+                                ne_end = None
+                        except:
                             ne_start = None
                             ne_end = None
-                    except:
-                        ne_start = None
-                        ne_end = None
-                    if (ne_start is None) or (ne_end is None):
+                        if (ne_start is None) or (ne_end is None):
+                            raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
+                        if min_ne_start is None:
+                            min_ne_start = ne_start
+                        elif ne_start < min_ne_start:
+                            min_ne_start = ne_start
+                        if max_ne_end is None:
+                            max_ne_end = ne_end
+                        elif ne_end > max_ne_end:
+                            max_ne_end = ne_end
+                    if (min_ne_start is None) or (max_ne_end is None):
                         raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
-                    if min_ne_start is None:
-                        min_ne_start = ne_start
-                    elif ne_start < min_ne_start:
-                        min_ne_start = ne_start
-                    if max_ne_end is None:
-                        max_ne_end = ne_end
-                    elif ne_end > max_ne_end:
-                        max_ne_end = ne_end
-                if (min_ne_start is None) or (max_ne_end is None):
-                    raise ValueError(err_msg + ' "{0}" is wrong description of named entity.'.format(ne_info))
-                ne_text = line_parts[2].strip()
-                if len(ne_text) == 0:
-                    raise ValueError(err_msg)
-                if max_ne_end > len(source_text):
-                    raise ValueError(err_msg + ' Annotation does not correspond to text!')
-                while min_ne_start < len(source_text):
-                    if not source_text[min_ne_start].isspace():
-                        break
-                    min_ne_start += 1
-                if min_ne_start > len(source_text):
-                    raise ValueError(err_msg + ' Annotation does not correspond to text!')
-                max_ne_end -= 1
-                while max_ne_end > ne_start:
-                    if not source_text[max_ne_end].isspace():
-                        break
-                    max_ne_end -= 1
-                max_ne_end += 1
-                new_idx = 0
-                while new_idx < len(res):
-                    if max_ne_end <= res[new_idx][1]:
-                        break
-                    new_idx += 1
-                ok = True
-                if (len(res) > 0) and (new_idx > 0):
-                    if min_ne_start < res[new_idx - 1][2]:
+                    ne_text = line_parts[2].strip()
+                    if len(ne_text) == 0:
                         warnings.warn(err_msg)
-                        ok = False
-                if ok:
-                    res.insert(new_idx, (ne_type, min_ne_start, max_ne_end))
+                    else:
+                        if max_ne_end > len(source_text):
+                            raise ValueError(err_msg + ' Annotation does not correspond to text!')
+                        while min_ne_start < len(source_text):
+                            if not source_text[min_ne_start].isspace():
+                                break
+                            min_ne_start += 1
+                        if min_ne_start > len(source_text):
+                            raise ValueError(err_msg + ' Annotation does not correspond to text!')
+                        max_ne_end -= 1
+                        while max_ne_end > ne_start:
+                            if not source_text[max_ne_end].isspace():
+                                break
+                            max_ne_end -= 1
+                        max_ne_end += 1
+                        new_idx = 0
+                        while new_idx < len(res):
+                            if max_ne_end <= res[new_idx][1]:
+                                break
+                            new_idx += 1
+                        ok = True
+                        if (len(res) > 0) and (new_idx > 0):
+                            if min_ne_start < res[new_idx - 1][2]:
+                                warnings.warn(err_msg)
+                                ok = False
+                        if ok:
+                            res.insert(new_idx, (ne_type, min_ne_start, max_ne_end))
             cur_line = fp.readline()
             line_idx += 1
+    if len(res) > 0:
+        idx = 1
+        while idx < len(res):
+            if (res[idx - 1][0] == res[idx][0]) and (source_text[res[idx - 1][2]:res[idx][1]].strip() == ''):
+                res[idx - 1] = (res[idx - 1][0], res[idx - 1][1], res[idx][2])
+                del res[idx]
+            else:
+                idx += 1
     return res
 
 
