@@ -22,9 +22,9 @@ import tensorflow_hub as hub
 
 
 class NeuroTagger(ClassifierMixin, BaseEstimator):
-    def __init__(self, elmo_name: str, n_units: int, dropout: float, recurrent_dropout: float, l2_kernel: float,
-                 l2_chain: float, n_epochs: int, validation_part: float, batch_size: int, use_lstm: bool, use_crf: bool,
-                 verbose: Union[int, bool]):
+    def __init__(self, elmo_name: str, n_units: int=512, dropout: float=0.7, recurrent_dropout: float=0.0,
+                 l2_kernel: float=1e-3, l2_chain: float=1e-6, n_epochs: int=100, validation_part: float=0.2,
+                 batch_size: int=32, use_lstm: bool=False, use_crf: bool=True, verbose: Union[int, bool]=True):
         self.elmo_name = elmo_name
         self.n_units = n_units
         self.dropout = dropout

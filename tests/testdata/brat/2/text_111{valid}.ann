@@ -1,0 +1,12 @@
+T0	properties 12 18;7 12	trucks hand-
+T5	equipment 215 226;227 234	temperature control
+T1	equipment 0 5	Drums
+T7	equipment 7 18	hand-trucks
+T2	equipment 20 27	pallets
+T8	equipment 29 54	forklifts Transfer piping
+T9	equipment 56 61	hoses
+T10	equipment 63 84	pumps Transfer piping
+T11	equipment 86 91	hoses
+T12	equipment 93 98	pumps
+T3	operations 99 117	Heat sterilization
+T13	equipment 144 159	heavy-duty bags

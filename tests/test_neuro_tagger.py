@@ -539,6 +539,9 @@ class TestNeuroTagger(unittest.TestCase):
             'As discussed  below  in  the  Hand  Calculations  of  Hydrate  Formation  Conditions  section,  there  '
             'is no simple way to expand the above pure lines into that for a mixture, though there are several ways '
             'to hand-calculate LW-H-V conditions (P / T) for mixed hydrocarbon hydrate formers.',
+            'Drums, hand-trucks, pallets, forklifts Transfer piping, hoses, pumps Transfer piping, hoses, pumps Heat '
+            'sterilization prior to bagging; special heavy-duty bags with hazard warning printed on sides Fume '
+            'ventilation, temperature control',
             'The full text of Oil & Gas Journal is available through OGJ Online, Oil & Gas Journal’s internet-based '
             'energy information service, at http://www.ogjonline.com. For information, send an e-mail message to '
             'webmaster@ogjonline.com.'
@@ -553,6 +556,11 @@ class TestNeuroTagger(unittest.TestCase):
                 ('properties', 141, 2), ('properties', 150, 2), ('equipment', 162, 21), ('equipment', 233, 23),
                 ('properties', 262, 30), ('equipment', 294, 7), ('equipment', 353, 5), ('equipment', 375, 7),
                 ('properties', 432, 6), ('equipment', 439, 10), ('properties', 450, 45)
+            ),
+            (
+                ('equipment', 0, 5), ('properties', 7, 11), ('equipment', 20, 7), ('equipment', 29, 25),
+                ('equipment', 56, 5), ('equipment', 63, 21), ('equipment', 86, 5), ('equipment', 93, 5),
+                ('operations', 99, 18), ('equipment', 144, 15), ('equipment', 215, 19)
             ),
             (
                 ('equipment', 17, 9), ('equipment', 68, 9), ('equipment', 103, 6)
