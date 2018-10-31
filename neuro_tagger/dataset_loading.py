@@ -139,6 +139,11 @@ def tokenize_all_by_sentences(texts: List[str], labels: List[tuple],
                 break
         if label_start_idx < 0:
             return tuple()
+        if labels_for_text[label_start_idx][1] >= (interval_start_idx + interval_length):
+            return tuple()
+        if (labels_for_text[label_start_idx][1] + labels_for_text[label_start_idx][2]) > \
+                (interval_start_idx + interval_length):
+            return None
         label_end_idx = len(labels_for_text) - 1
         for label_idx in range(label_start_idx + 1, len(labels_for_text)):
             if (labels_for_text[label_idx][1] + labels_for_text[label_idx][2]) >= \
@@ -163,7 +168,10 @@ def tokenize_all_by_sentences(texts: List[str], labels: List[tuple],
     new_texts = []
     new_labels = []
     for idx in range(n):
-        sentences = sent_tokenize(texts[idx], language)
+        sentences = list(filter(
+            lambda it2: len(it2) > 0,
+            map(lambda it1: it1.strip(), sent_tokenize(texts[idx], language))
+        ))
         if len(sentences) > 0:
             start_pos = 0
             sentence_start_pos = -1

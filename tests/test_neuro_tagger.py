@@ -153,6 +153,17 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_4(self):
+        s = np.array(['Мама мыла раму _.', 'Папа мыл синхрофазотрон!'], dtype=object)
+        true_tokens = [
+            ((0, 4), (5, 4), (10, 4)),
+            ((0, 4), (5, 3), (9, 14))
+        ]
+        predicted_tokens = self.tagger.tokenize(s)
+        self.assertIsInstance(predicted_tokens, list)
+        self.assertEqual(true_tokens, predicted_tokens)
+        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
+
+    def test_tokenize_5(self):
         s = []
         true_tokens = []
         predicted_tokens = self.tagger.tokenize(s)

@@ -1,4 +1,3 @@
-import codecs
 import copy
 import math
 import os
@@ -251,10 +250,11 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 found_pos = X[idx].find(cur_token, start_pos)
                 if found_pos < 0:
                     raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
-                search_res = self.re_for_token_.search(cur_token)
-                if search_res is not None:
-                    if (search_res.start() >= 0) and (search_res.end() >= 0):
-                        token_bounds_in_cur_text.append((found_pos, len(cur_token)))
+                if not (set(cur_token) <= {'_'}):
+                    search_res = self.re_for_token_.search(cur_token)
+                    if search_res is not None:
+                        if (search_res.start() >= 0) and (search_res.end() >= 0):
+                            token_bounds_in_cur_text.append((found_pos, len(cur_token)))
                 start_pos = found_pos + len(cur_token)
             token_bounds_in_texts.append(tuple(token_bounds_in_cur_text))
             del token_bounds_in_cur_text
@@ -333,7 +333,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         if not hasattr(self, 'tokenizer_'):
             self.tokenizer_ = NISTTokenizer()
         if not hasattr(self, 're_for_token_'):
-            self.re_for_token_ = re.compile('\w+', re.U)
+            self.re_for_token_ = re.compile('[\w]+', re.U)
 
     def update_elmo(self):
         if not hasattr(self, 'elmo_'):
