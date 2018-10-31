@@ -2,8 +2,10 @@ import codecs
 import copy
 import os
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import warnings
+
+from nltk import sent_tokenize
 
 
 def tokenize_text(src: str) -> Tuple[str, dict]:
@@ -122,6 +124,80 @@ def load_annotation_from_brat(file_name: str, source_text: str) -> List[Tuple[st
             else:
                 idx += 1
     return res
+
+
+def tokenize_all_by_sentences(texts: List[str], labels: List[tuple],
+                              language: str='english') -> Tuple[List[str], List[tuple]]:
+
+    def select_labels_in_interval(labels_for_text: tuple, interval_start_idx: int,
+                                  interval_length: int) -> Union[tuple, None]:
+        ok = True
+        label_start_idx = -1
+        for label_idx in range(len(labels_for_text)):
+            if labels_for_text[label_idx][1] >= interval_start_idx:
+                label_start_idx = label_idx
+                break
+        if label_start_idx < 0:
+            return tuple()
+        label_end_idx = len(labels_for_text) - 1
+        for label_idx in range(label_start_idx + 1, len(labels_for_text)):
+            if (labels_for_text[label_idx][1] + labels_for_text[label_idx][2]) >= \
+                    (interval_start_idx + interval_length):
+                label_end_idx = label_idx - 1
+                break
+        if label_start_idx > 0:
+            if (labels_for_text[label_start_idx - 1][1] + labels_for_text[label_start_idx - 1][2]) > interval_start_idx:
+                ok = False
+        if not ok:
+            if label_end_idx < (len(labels_for_text) - 1):
+                if labels_for_text[label_end_idx + 1][1] < (interval_start_idx + interval_length):
+                    ok = False
+        if not ok:
+            return None
+        return tuple(map(lambda cur_label: (cur_label[0], cur_label[1] - interval_start_idx, cur_label[2]),
+                         labels_for_text[label_start_idx:(label_end_idx + 1)]))
+
+    n = len(texts)
+    if n != len(labels):
+        raise ValueError('Number of labels does not correspond to number of texts! {0} != {1}'.format(len(labels), n))
+    new_texts = []
+    new_labels = []
+    for idx in range(n):
+        sentences = sent_tokenize(texts[idx], language)
+        if len(sentences) > 0:
+            start_pos = 0
+            sentence_start_pos = -1
+            new_texts_ = []
+            new_labels_ = []
+            for cur_sent in sentences:
+                start_pos = texts[idx].find(cur_sent, start_pos)
+                if start_pos < 0:
+                    raise ValueError('Text {0} cannot be tokenized!'.format(idx))
+                if sentence_start_pos < 0:
+                    labels_for_sentence = select_labels_in_interval(labels[idx], start_pos, len(cur_sent))
+                    if labels_for_sentence is None:
+                        sentence_start_pos = start_pos
+                    else:
+                        new_texts_.append(cur_sent)
+                        new_labels_.append(labels_for_sentence)
+                else:
+                    labels_for_sentence = select_labels_in_interval(labels[idx], sentence_start_pos,
+                                                                    start_pos + len(cur_sent) - sentence_start_pos)
+                    if labels_for_sentence is not None:
+                        new_texts_.append(texts[idx][sentence_start_pos:(start_pos + len(cur_sent))])
+                        new_labels_.append(labels_for_sentence)
+                        sentence_start_pos = -1
+                start_pos += len(cur_sent)
+            if sentence_start_pos >= 0:
+                new_texts.append(texts[idx])
+                new_labels.append(labels[idx])
+            else:
+                new_texts += new_texts_
+                new_labels += new_labels_
+        else:
+            new_texts.append(texts[idx])
+            new_labels.append(labels[idx])
+    return new_texts, new_labels
 
 
 def load_dataset_from_brat(dir_name: str) -> Tuple[List[str], List[tuple]]:

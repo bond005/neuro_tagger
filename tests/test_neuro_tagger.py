@@ -13,10 +13,12 @@ import numpy as np
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
+    from neuro_tagger.dataset_loading import tokenize_all_by_sentences
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
+    from neuro_tagger.dataset_loading import tokenize_all_by_sentences
 
 
 class TestNeuroTagger(unittest.TestCase):
@@ -619,6 +621,99 @@ class TestNeuroTagger(unittest.TestCase):
         loaded_texts, loaded_labels = load_dataset_from_factrueval2016(factrueval_data_path)
         self.assertEqual(true_texts, loaded_texts)
         self.assertEqual(true_labels, loaded_labels)
+
+    def test_tokenize_all_by_sentences_1(self):
+        source_texts = [
+            'As  mentioned,  despite  the  large  number  of  installations  world-wide,  PC  pumps  and  drive  '
+            'systems  do  not,  in  general,  conform  to  any  industry  standards  or common specifications. '
+            'As a result, there is significant variation in the products available from different vendors, which '
+            'generally precludes interchangeability of equipment components.',
+            'The nomenclature  (e.g.,  naming  conventions,  ratings)  used  in  conjunction  with  both  pumps  and '
+            'drive units also varies considerably, which can make it difficult for users to easily compare and select  '
+            'products  from  different  suppliers.  Nevertheless,  there  have  been  some  recent  efforts  to '
+            'develop industry standards for PCP systems.'
+        ]
+        source_labels = [
+            (
+                ('equipment', 49, 13), ('equipment', 77, 9), ('equipment', 93, 14), ('equipment', 151, 8),
+                ('equipment', 283, 7), ('equipment', 340, 20)
+            ),
+            (
+                ('equipment', 34, 11), ('equipment', 237, 9), ('properties', 317, 8), ('equipment', 340, 11)
+            )
+        ]
+        true_texts = [
+            'As  mentioned,  despite  the  large  number  of  installations  world-wide,  PC  pumps  and  drive  '
+            'systems  do  not,  in  general,  conform  to  any  industry  standards  or common specifications.',
+            'As a result, there is significant variation in the products available from different vendors, which '
+            'generally precludes interchangeability of equipment components.',
+            'The nomenclature  (e.g.,  naming  conventions,  ratings)  used  in  conjunction  with  both  pumps  and '
+            'drive units also varies considerably, which can make it difficult for users to easily compare and select  '
+            'products  from  different  suppliers.',
+            'Nevertheless,  there  have  been  some  recent  efforts  to develop industry standards for PCP systems.'
+        ]
+        true_labels = [
+            (
+                ('equipment', 49, 13), ('equipment', 77, 9), ('equipment', 93, 14), ('equipment', 151, 8)
+            ),
+            (
+                ('equipment', 85, 7), ('equipment', 142, 20)
+            ),
+            (
+                ('equipment', 34, 11), ('equipment', 237, 9)
+            ),
+            (
+                ('properties', 68, 8), ('equipment', 91, 11)
+            )
+        ]
+        pred_texts, pred_labels = tokenize_all_by_sentences(source_texts, source_labels)
+        self.assertEqual(true_texts, pred_texts)
+        self.assertEqual(true_labels, pred_labels)
+
+    def test_tokenize_all_by_sentences_2(self):
+        source_texts = [
+            'As  mentioned,  despite  the  large  number  of  installations  world-wide,  PC  pumps  and  drive  '
+            'systems  do  not,  in  general,  conform  to  any  industry  standards  or common specifications. '
+            'As a result, there is significant variation in the products available from different vendors, which '
+            'generally precludes interchangeability of equipment components.',
+            'The nomenclature  (e.g.,  naming  conventions,  ratings)  used  in  conjunction  with  both  pumps  and '
+            'drive units also varies considerably, which can make it difficult for users to easily compare and select  '
+            'products  from  different  suppliers.  Nevertheless,  there  have  been  some  recent  efforts  to '
+            'develop industry standards for PCP systems.'
+        ]
+        source_labels = [
+            (
+                ('equipment', 49, 13), ('equipment', 77, 9), ('equipment', 93, 14), ('equipment', 151, 8),
+                ('equipment', 283, 7), ('equipment', 340, 20)
+            ),
+            (
+                ('equipment', 34, 11), ('equipment', 237, 24), ('properties', 317, 8), ('equipment', 340, 11)
+            )
+        ]
+        true_texts = [
+            'As  mentioned,  despite  the  large  number  of  installations  world-wide,  PC  pumps  and  drive  '
+            'systems  do  not,  in  general,  conform  to  any  industry  standards  or common specifications.',
+            'As a result, there is significant variation in the products available from different vendors, which '
+            'generally precludes interchangeability of equipment components.',
+            'The nomenclature  (e.g.,  naming  conventions,  ratings)  used  in  conjunction  with  both  pumps  and '
+            'drive units also varies considerably, which can make it difficult for users to easily compare and select  '
+            'products  from  different  suppliers.  Nevertheless,  there  have  been  some  recent  efforts  to '
+            'develop industry standards for PCP systems.'
+        ]
+        true_labels = [
+            (
+                ('equipment', 49, 13), ('equipment', 77, 9), ('equipment', 93, 14), ('equipment', 151, 8)
+            ),
+            (
+                ('equipment', 85, 7), ('equipment', 142, 20)
+            ),
+            (
+                ('equipment', 34, 11), ('equipment', 237, 24), ('properties', 317, 8), ('equipment', 340, 11)
+            )
+        ]
+        pred_texts, pred_labels = tokenize_all_by_sentences(source_texts, source_labels)
+        self.assertEqual(true_texts, pred_texts)
+        self.assertEqual(true_labels, pred_labels)
 
     def load_dataset(self, file_name: str) -> Tuple[List[str], List[tuple]]:
         texts = []

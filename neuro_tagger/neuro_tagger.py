@@ -55,9 +55,13 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.update_elmo()
         X_tokenized = self.tokenize(X)
         self.max_text_len_ = max(map(lambda idx: len(X_tokenized[idx]), range(len(X_tokenized))))
+        if self.verbose:
+            print('Maximal length of text is {0}.'.format(self.max_text_len_))
         K.get_session()
         X_ = self.texts_to_X(X, X_tokenized, self.max_text_len_)
         y_ = self.labels_to_y(X, y, X_tokenized, self.max_text_len_)
+        if self.verbose:
+            print('All data have been prepared using ELMo.')
         indices = np.arange(0, X_.shape[0], dtype=np.int32)
         np.random.shuffle(indices)
         n_validation_part = int(round(self.validation_part * X_.shape[0]))
