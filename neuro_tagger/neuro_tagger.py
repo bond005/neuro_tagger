@@ -198,7 +198,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             ne_token_start = -1
             ne_type = None
             entities_in_text = []
-            for token_idx in range(len(X_tokenized[text_idx])):
+            for token_idx in range(min(len(X_tokenized[text_idx]), y.shape[1])):
                 if y[text_idx, token_idx] > 0:
                     ne_idx = (int(y[text_idx, token_idx]) - 1) // 2
                     if ne_type is None:
@@ -220,7 +220,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                         ne_token_start = -1
                         ne_type = None
             if ne_type is not None:
-                token_idx = len(X_tokenized[text_idx])
+                token_idx = min(len(X_tokenized[text_idx]), y.shape[1])
                 start_char_idx = X_tokenized[text_idx][ne_token_start][0]
                 end_char_idx = X_tokenized[text_idx][token_idx - 1][0] + X_tokenized[text_idx][token_idx - 1][1]
                 entities_in_text.append((ne_type, start_char_idx, end_char_idx - start_char_idx))
