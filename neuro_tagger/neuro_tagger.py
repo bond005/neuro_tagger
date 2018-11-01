@@ -722,33 +722,33 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
     def check_params(**kwargs):
         if 'batch_size' not in kwargs:
             raise ValueError('`batch_size` is not found!')
-        if not isinstance(kwargs['batch_size'], int):
+        if np.dtype(type(kwargs['batch_size'])) != 'i':
             raise ValueError('`batch_size` must be `{0}`, not `{1}`.'.format(type(10), type(kwargs['batch_size'])))
         if kwargs['batch_size'] < 1:
             raise ValueError('`batch_size` must be a positive number! {0} is not positive.'.format(
                 kwargs['batch_size']))
         if 'n_units' not in kwargs:
             raise ValueError('`n_units` is not found!')
-        if not isinstance(kwargs['n_units'], int):
+        if np.dtype(type(kwargs['n_units'])) != 'i':
             raise ValueError('`n_units` must be `{0}`, not `{1}`.'.format(type(10), type(kwargs['n_units'])))
         if kwargs['n_units'] < 1:
             raise ValueError('`n_units` must be a positive number! {0} is not positive.'.format(kwargs['n_units']))
         if 'n_epochs' not in kwargs:
             raise ValueError('`n_epochs` is not found!')
-        if not isinstance(kwargs['n_epochs'], int):
+        if np.dtype(type(kwargs['n_epochs'])) != 'i':
             raise ValueError('`n_epochs` must be `{0}`, not `{1}`.'.format(type(10), type(kwargs['n_epochs'])))
         if kwargs['n_epochs'] < 1:
             raise ValueError('`n_epochs` must be a positive number! {0} is not positive.'.format(kwargs['n_epochs']))
         if 'dropout' not in kwargs:
             raise ValueError('`dropout` is not found!')
-        if (not isinstance(kwargs['dropout'], float)) and (not isinstance(kwargs['dropout'], int)):
+        if np.dtype(type(kwargs['dropout'])) not in {'f', 'i'}:
             raise ValueError('`dropout` must be `{0}`, not `{1}`.'.format(type(10.3), type(kwargs['dropout'])))
         if (kwargs['dropout'] < 0.0) or (kwargs['dropout'] >= 1.0):
             raise ValueError('`dropout` must be a floating-point number in the interval [0.0, 1.0)! {0} is not in '
                              'this interval'.format(kwargs['dropout']))
         if 'recurrent_dropout' not in kwargs:
             raise ValueError('`recurrent_dropout` is not found!')
-        if (not isinstance(kwargs['recurrent_dropout'], float)) and (not isinstance(kwargs['recurrent_dropout'], int)):
+        if np.dtype(type(kwargs['recurrent_dropout'])) not in {'f', 'i'}:
             raise ValueError('`recurrent_dropout` must be `{0}`, not `{1}`.'.format(
                 type(10.3), type(kwargs['recurrent_dropout'])))
         if (kwargs['recurrent_dropout'] < 0.0) or (kwargs['recurrent_dropout'] >= 1.0):
@@ -756,21 +756,21 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                              'not in this interval'.format(kwargs['recurrent_dropout']))
         if 'l2_kernel' not in kwargs:
             raise ValueError('`l2_kernel` is not found!')
-        if (not isinstance(kwargs['l2_kernel'], float)) and (not isinstance(kwargs['l2_kernel'], int)):
+        if np.dtype(type(kwargs['l2_kernel'])) not in {'f', 'i'}:
             raise ValueError('`l2_kernel` must be `{0}`, not `{1}`.'.format(type(10.3), type(kwargs['l2_kernel'])))
         if kwargs['l2_kernel'] < 0.0:
             raise ValueError('`l2_kernel` must be a non-negative floating-point number! {0} is negative number'.format(
                 kwargs['l2_kernel']))
         if 'l2_chain' not in kwargs:
             raise ValueError('`l2_chain` is not found!')
-        if (not isinstance(kwargs['l2_chain'], float)) and (not isinstance(kwargs['l2_chain'], int)):
+        if np.dtype(type(kwargs['l2_chain'])) not in {'f', 'i'}:
             raise ValueError('`l2_chain` must be `{0}`, not `{1}`.'.format(type(10.3), type(kwargs['l2_chain'])))
         if kwargs['l2_chain'] < 0.0:
             raise ValueError('`l2_chain` must be a non-negative floating-point number! {0} is negative number'.format(
                 kwargs['l2_chain']))
         if 'validation_part' not in kwargs:
             raise ValueError('`validation_part` is not found!')
-        if (not isinstance(kwargs['validation_part'], float)) and (not isinstance(kwargs['validation_part'], int)):
+        if np.dtype(type(kwargs['validation_part'])) not in {'f', 'i'}:
             raise ValueError('`validation_part` must be `{0}`, not `{1}`.'.format(
                 type(10.3), type(kwargs['validation_part'])))
         if (kwargs['validation_part'] <= 0.0) or (kwargs['validation_part'] >= 1.0):
@@ -778,19 +778,19 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                              'not in this interval'.format(kwargs['validation_part']))
         if 'verbose' not in kwargs:
             raise ValueError('`verbose` is not found!')
-        if (not isinstance(kwargs['verbose'], int)) and (not isinstance(kwargs['verbose'], bool)):
+        if np.dtype(type(kwargs['verbose'])) not in {'b', 'i'}:
             raise ValueError('`verbose` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['verbose'])))
         if 'cached' not in kwargs:
             raise ValueError('`cached` is not found!')
-        if (not isinstance(kwargs['cached'], int)) and (not isinstance(kwargs['cached'], bool)):
+        if np.dtype(type(kwargs['cached'])) not in {'b', 'i'}:
             raise ValueError('`cached` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['cached'])))
         if 'use_crf' not in kwargs:
             raise ValueError('`use_crf` is not found!')
-        if (not isinstance(kwargs['use_crf'], int)) and (not isinstance(kwargs['use_crf'], bool)):
+        if np.dtype(type(kwargs['use_crf'])) not in {'b', 'i'}:
             raise ValueError('`use_crf` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['use_crf'])))
         if 'use_lstm' not in kwargs:
             raise ValueError('`use_lstm` is not found!')
-        if (not isinstance(kwargs['use_lstm'], int)) and (not isinstance(kwargs['use_lstm'], bool)):
+        if np.dtype(type(kwargs['use_lstm'])) not in {'b', 'i'}:
             raise ValueError('`use_lstm` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['use_lstm'])))
         if (not kwargs['use_lstm']) and (not kwargs['use_crf']):
             raise ValueError('`use_lstm` or `use_crf` must be True.')
