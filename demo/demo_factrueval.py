@@ -132,7 +132,7 @@ def main():
                 fp = codecs.open(os.path.join(result_dir_name, cur_book_name + '.task1'), mode='w', encoding='utf-8')
             if len(predicted_labels[text_idx]) > 0:
                 for cur_ne in predicted_labels[text_idx]:
-                    fp.write('{0} {1} {2}\n'.format(cur_ne[0].lower(), cur_ne[0] + start_pos, cur_ne[1]))
+                    fp.write('{0} {1} {2}\n'.format(cur_ne[0].lower(), cur_ne[1] + start_pos, cur_ne[2]))
                 fp.write('\n')
             start_pos += len(texts_for_testing[text_idx])
     finally:
