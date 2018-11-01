@@ -21,9 +21,12 @@ import tensorflow_hub as hub
 
 
 class NeuroTagger(ClassifierMixin, BaseEstimator):
+    CACHE = None
+
     def __init__(self, elmo_name: str, n_units: int=512, dropout: float=0.7, recurrent_dropout: float=0.0,
                  l2_kernel: float=1e-3, l2_chain: float=1e-6, n_epochs: int=100, validation_part: float=0.2,
-                 batch_size: int=32, use_lstm: bool=False, use_crf: bool=True, verbose: Union[int, bool]=True):
+                 batch_size: int=32, use_lstm: bool=False, use_crf: bool=True, verbose: Union[int, bool]=True,
+                 cached: bool=False):
         self.elmo_name = elmo_name
         self.n_units = n_units
         self.dropout = dropout
@@ -36,6 +39,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.use_lstm = use_lstm
         self.use_crf = use_crf
         self.batch_size = batch_size
+        self.cached = cached
 
     def __del__(self):
         if (hasattr(self, 'elmo_') or hasattr(self, 'classifier_')):
@@ -263,50 +267,77 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
 
     def texts_to_X(self, texts: Union[list, tuple, np.ndarray], token_bounds_in_all_texts: List[tuple],
                    max_text_len: int) -> np.ndarray:
-        X = None
-        embedding_size = None
-        n_batches = int(math.ceil(len(texts) / float(self.batch_size)))
-        sess = K.get_session()
-        tokens_ph = tf.placeholder(shape=(None, None), dtype=tf.string, name='tokens')
-        tokens_length_ph = tf.placeholder(shape=(None,), dtype=tf.int32, name='tokens_length')
-        embeddings_of_texts = self.elmo_(
-            inputs={
-                'tokens': tokens_ph,
-                'sequence_len': tokens_length_ph
-            },
-            signature='tokens',
-            as_dict=True
-        )['elmo']
-        for batch_idx in range(n_batches):
-            start_pos = batch_idx * self.batch_size
-            end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
-            texts_in_batch = []
-            lengths_of_texts = []
-            for text_idx in range(start_pos, end_pos):
-                new_text = [texts[text_idx][token_bounds[0]:(token_bounds[0] + token_bounds[1])]
-                            for token_bounds in token_bounds_in_all_texts[text_idx]]
-                if len(new_text) > max_text_len:
-                    new_text = new_text[:max_text_len]
-                lengths_of_texts.append(len(new_text))
-                while len(new_text) < max_text_len:
-                    new_text.append('')
-                texts_in_batch.append(new_text)
-            embeddings_of_texts_as_numpy = sess.run(
-                embeddings_of_texts,
-                feed_dict={
-                    tokens_ph: texts_in_batch,
-                    tokens_length_ph: lengths_of_texts
-                }
-            )
-            if embedding_size is None:
-                embedding_size = embeddings_of_texts_as_numpy.shape[2]
-            if X is None:
-                X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
-            for idx in range(end_pos - start_pos):
-                text_idx = start_pos + idx
-                for token_idx in range(min(max_text_len, len(token_bounds_in_all_texts[text_idx]))):
-                    X[text_idx][token_idx] = embeddings_of_texts_as_numpy[idx][token_idx]
-            del embeddings_of_texts_as_numpy, texts_in_batch, lengths_of_texts
+        if self.cached:
+            if self.CACHE is None:
+                X = None
+            else:
+                if isinstance(texts, np.ndarray):
+                    key = tuple(texts.tolist())
+                elif not isinstance(texts, tuple):
+                    key = tuple(texts)
+                else:
+                    key = texts
+                if key in self.CACHE:
+                    X = self.CACHE[key]
+                else:
+                    X = None
+        else:
+            X = None
+        if X is None:
+            embedding_size = None
+            n_batches = int(math.ceil(len(texts) / float(self.batch_size)))
+            sess = K.get_session()
+            tokens_ph = tf.placeholder(shape=(None, None), dtype=tf.string, name='tokens')
+            tokens_length_ph = tf.placeholder(shape=(None,), dtype=tf.int32, name='tokens_length')
+            embeddings_of_texts = self.elmo_(
+                inputs={
+                    'tokens': tokens_ph,
+                    'sequence_len': tokens_length_ph
+                },
+                signature='tokens',
+                as_dict=True
+            )['elmo']
+            for batch_idx in range(n_batches):
+                start_pos = batch_idx * self.batch_size
+                end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
+                texts_in_batch = []
+                lengths_of_texts = []
+                for text_idx in range(start_pos, end_pos):
+                    new_text = [texts[text_idx][token_bounds[0]:(token_bounds[0] + token_bounds[1])]
+                                for token_bounds in token_bounds_in_all_texts[text_idx]]
+                    if len(new_text) > max_text_len:
+                        new_text = new_text[:max_text_len]
+                    lengths_of_texts.append(len(new_text))
+                    while len(new_text) < max_text_len:
+                        new_text.append('')
+                    texts_in_batch.append(new_text)
+                embeddings_of_texts_as_numpy = sess.run(
+                    embeddings_of_texts,
+                    feed_dict={
+                        tokens_ph: texts_in_batch,
+                        tokens_length_ph: lengths_of_texts
+                    }
+                )
+                if embedding_size is None:
+                    embedding_size = embeddings_of_texts_as_numpy.shape[2]
+                if X is None:
+                    X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
+                for idx in range(end_pos - start_pos):
+                    text_idx = start_pos + idx
+                    for token_idx in range(min(max_text_len, len(token_bounds_in_all_texts[text_idx]))):
+                        X[text_idx][token_idx] = embeddings_of_texts_as_numpy[idx][token_idx]
+                del embeddings_of_texts_as_numpy, texts_in_batch, lengths_of_texts
+            if self.cached:
+                if isinstance(texts, np.ndarray):
+                    key = tuple(texts.tolist())
+                elif not isinstance(texts, tuple):
+                    key = tuple(texts)
+                else:
+                    key = texts
+                if self.CACHE is None:
+                    self.CACHE = {key: X}
+                else:
+                    self.CACHE[key] = X
         return X
 
     def labels_to_y(self, texts: Union[list, tuple, np.ndarray], labels: Union[list, tuple, np.ndarray],
@@ -346,7 +377,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         return {'elmo_name': self.elmo_name, 'n_units': self.n_units, 'dropout': self.dropout,
                 'recurrent_dropout': self.recurrent_dropout, 'l2_kernel': self.l2_kernel, 'l2_chain': self.l2_chain,
                 'n_epochs': self.n_epochs, 'validation_part': self.validation_part, 'verbose': self.verbose,
-                'batch_size': self.batch_size, 'use_lstm': self.use_lstm, 'use_crf': self.use_crf}
+                'batch_size': self.batch_size, 'use_lstm': self.use_lstm, 'use_crf': self.use_crf,
+                'cached': self.cached}
 
     def set_params(self, **params):
         for parameter, value in params.items():
@@ -434,7 +466,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             raise ValueError('`new_params` is wrong! Expected `{0}`, got `{1}`.'.format(type({0: 1}), type(new_params)))
         self.check_params(**new_params)
         expected_param_keys = {'elmo_name', 'n_units', 'dropout', 'recurrent_dropout', 'l2_kernel', 'l2_chain',
-                               'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf', 'use_lstm'}
+                               'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf', 'use_lstm', 'cached'}
         params_after_training = {'weights', 'named_entities_', 'max_text_len_', 'embedding_size_'}
         is_fitted = len(set(new_params.keys())) > len(expected_param_keys)
         if is_fitted:
@@ -452,6 +484,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.verbose = new_params['verbose']
         self.use_crf = new_params['use_crf']
         self.use_lstm = new_params['use_lstm']
+        self.cached = new_params['cached']
         if is_fitted:
             if not isinstance(new_params['named_entities_'], tuple):
                 raise ValueError('`named_entities_` is wrong! Expected `{0}`, got `{1}`.'.format(
@@ -560,10 +593,16 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             y_true_ = np.concatenate((y_true_, np.argmax(y_true[text_idx], axis=-1)[0:lengths_of_texts[text_idx]]))
             y_pred_ = np.concatenate((y_pred_, np.argmax(y_pred[text_idx], axis=-1)[0:lengths_of_texts[text_idx]]))
         f1 = 0.0
+        n = 0
         for class_idx in range(1, y_true.shape[2]):
-            f1 += f1_score((y_true_ == class_idx).astype(np.int32), (y_pred_ == class_idx).astype(np.int32),
-                           average='binary')
-        return f1 / float(y_true.shape[2] - 1)
+            y_true_bin = (y_true_ == class_idx).astype(np.int32)
+            y_pred_bin = (y_pred_ == class_idx).astype(np.int32)
+            if (y_true_bin.max() > 0) or (y_pred_bin.max() > 0):
+                f1 += f1_score(y_true_bin, y_pred_bin, average='binary')
+                n += 1
+        if n == 0:
+            return 0.0
+        return f1 / float(n)
 
     @staticmethod
     def generate_batches(X: np.ndarray, y: Union[np.ndarray, None], batch_size: int, shuffle: bool=True):
@@ -703,6 +742,10 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             raise ValueError('`verbose` is not found!')
         if (not isinstance(kwargs['verbose'], int)) and (not isinstance(kwargs['verbose'], bool)):
             raise ValueError('`verbose` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['verbose'])))
+        if 'cached' not in kwargs:
+            raise ValueError('`cached` is not found!')
+        if (not isinstance(kwargs['cached'], int)) and (not isinstance(kwargs['cached'], bool)):
+            raise ValueError('`cached` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['cached'])))
         if 'use_crf' not in kwargs:
             raise ValueError('`use_crf` is not found!')
         if (not isinstance(kwargs['use_crf'], int)) and (not isinstance(kwargs['use_crf'], bool)):
