@@ -475,7 +475,7 @@ def load_document_from_factrueval2016(tokens_file_name: str, spans_file_name: st
     return list_of_texts, list_of_labels
 
 
-def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tuple]]:
+def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tuple], List[str]]:
 
     def get_file_ID(src_name: str) -> int:
         point_pos_ = src_name.find('.')
@@ -493,6 +493,7 @@ def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tup
         raise ValueError('The directory `{0}` contains wrong data!'.format(dir_name))
     list_of_all_texts = []
     list_of_all_labels = []
+    list_of_all_names = []
     for idx in range(len(names_of_files) // 6):
         base_name = names_of_files[idx * 6]
         point_pos = base_name.rfind('.')
@@ -514,4 +515,5 @@ def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tup
                                                                           objects_file_name)
         list_of_all_texts += list_of_texts
         list_of_all_labels += list_of_labels
-    return list_of_all_texts, list_of_all_labels
+        list_of_all_names += [prepared_base_name] * len(list_of_texts)
+    return list_of_all_texts, list_of_all_labels, list_of_all_names

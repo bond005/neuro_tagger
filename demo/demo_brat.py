@@ -2,7 +2,6 @@ from argparse import ArgumentParser
 import os
 import pickle
 import sys
-from typing import List
 
 import numpy as np
 from skopt import BayesSearchCV
@@ -15,29 +14,6 @@ except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_brat, tokenize_all_by_sentences
-
-
-def print_info_about_labels(labels: List[tuple]):
-    print('Number of texts is {0}.'.format(len(labels)))
-    frequencies_of_named_entities = dict()
-    for cur_sample in labels:
-        for cur_ne in cur_sample:
-            cur_ne_type = cur_ne[0].upper()
-            frequencies_of_named_entities[cur_ne_type] = frequencies_of_named_entities.get(cur_ne_type, 0) + 1
-    named_entities = sorted(list(frequencies_of_named_entities.keys()))
-    max_width_of_ne = len(named_entities[0])
-    max_width_of_value = len(str(frequencies_of_named_entities[named_entities[0]]))
-    for cur_ne_type in named_entities:
-        if len(cur_ne_type) > max_width_of_ne:
-            max_width_of_ne = len(cur_ne_type)
-        value = str(frequencies_of_named_entities[cur_ne_type])
-        if len(value) > max_width_of_value:
-            max_width_of_value = len(value)
-    print('Named entities:')
-    for cur_ne_type in named_entities:
-        print('  {0:>{1}}\t{2:>{3}}'.format(cur_ne_type, max_width_of_ne, frequencies_of_named_entities[cur_ne_type],
-                                            max_width_of_value))
-    print('')
 
 
 def main():
@@ -74,7 +50,7 @@ def main():
 
     texts, labels = load_dataset_from_brat(data_name)
     texts, labels = tokenize_all_by_sentences(texts, labels)
-    print_info_about_labels(labels)
+    NeuroTagger.print_info_about_labels(labels)
     texts = np.array(texts, dtype=object)
     labels = np.array(labels, dtype=object)
     indices_for_cv = NeuroTagger.stratified_kfold(texts, labels, cv)
@@ -91,7 +67,7 @@ def main():
         n_jobs=1
     )
     opt.fit(texts, labels)
-    with open(model_name, 'rb') as fp:
+    with open(model_name, 'wb') as fp:
         pickle.dump(opt.best_estimator_, fp)
     print('')
     print('====================')
@@ -117,7 +93,7 @@ def main():
     )
     opt.fit(texts, labels)
     if best_score < opt.best_score_:
-        with open(model_name, 'rb') as fp:
+        with open(model_name, 'wb') as fp:
             pickle.dump(opt.best_estimator_, fp)
         best_score = opt.best_score_
     print('')
@@ -144,7 +120,7 @@ def main():
     )
     opt.fit(texts, labels)
     if best_score < opt.best_score_:
-        with open(model_name, 'rb') as fp:
+        with open(model_name, 'wb') as fp:
             pickle.dump(opt.best_estimator_, fp)
     print('')
     print('====================')

@@ -785,9 +785,12 @@ class TestNeuroTagger(unittest.TestCase):
             (('LOC', 62, 7), ('LOC', 78, 5)),
             tuple()
         ]
-        loaded_texts, loaded_labels = load_dataset_from_factrueval2016(factrueval_data_path)
+        true_names = ['book_58', 'book_58', 'book_58', 'book_146', 'book_146', 'book_146', 'book_146', 'book_146',
+                      'book_146', 'book_146', 'book_146']
+        loaded_texts, loaded_labels, loaded_names = load_dataset_from_factrueval2016(factrueval_data_path)
         self.assertEqual(true_texts, loaded_texts)
         self.assertEqual(true_labels, loaded_labels)
+        self.assertEqual(true_names, loaded_names)
 
     def test_tokenize_all_by_sentences_1(self):
         source_texts = [

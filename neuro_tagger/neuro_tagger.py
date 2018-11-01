@@ -858,3 +858,27 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         train_index = splits[0][0]
         test_index = splits[0][1]
         return train_index, test_index
+
+    @staticmethod
+    def print_info_about_labels(labels: List[tuple]):
+        print('Number of texts is {0}.'.format(len(labels)))
+        frequencies_of_named_entities = dict()
+        for cur_sample in labels:
+            for cur_ne in cur_sample:
+                cur_ne_type = cur_ne[0].upper()
+                frequencies_of_named_entities[cur_ne_type] = frequencies_of_named_entities.get(cur_ne_type, 0) + 1
+        named_entities = sorted(list(frequencies_of_named_entities.keys()))
+        max_width_of_ne = len(named_entities[0])
+        max_width_of_value = len(str(frequencies_of_named_entities[named_entities[0]]))
+        for cur_ne_type in named_entities:
+            if len(cur_ne_type) > max_width_of_ne:
+                max_width_of_ne = len(cur_ne_type)
+            value = str(frequencies_of_named_entities[cur_ne_type])
+            if len(value) > max_width_of_value:
+                max_width_of_value = len(value)
+        print('Named entities:')
+        for cur_ne_type in named_entities:
+            print(
+                '  {0:>{1}}\t{2:>{3}}'.format(cur_ne_type, max_width_of_ne, frequencies_of_named_entities[cur_ne_type],
+                                              max_width_of_value))
+        print('')
