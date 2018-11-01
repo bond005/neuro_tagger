@@ -112,11 +112,15 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         try:
             epoch_idx = 0
             best_f1 = None
+            best_accuracy = None
             patience = 0
             MAX_PATIENCE = 5
-            column_widths = [max(len(str(self.n_epochs)), len('Epoch')), max(8, len('F1-macro'))]
+            column_widths = [max(len(str(self.n_epochs)), len('Epoch')), max(8, len('F1-macro')),
+                             max(8, len('Accuracy'))]
             if self.verbose:
-                print('{0:>{1}}  {2:>{3}}'.format('Epoch', column_widths[0], 'F1-macro', column_widths[1]))
+                print('{0:>{1}}  {2:>{3}}  {4:>{5}}'.format('Epoch', column_widths[0], 'F1-macro', column_widths[1],
+                                                            'Accuracy', column_widths[2]))
+            lengths_of_texts_for_testing = [len(X_tokenized_test[idx]) for idx in range(len(X_tokenized_test))]
             while epoch_idx < self.n_epochs:
                 for X_batch, y_batch in self.generate_batches(X_train, y_train, self.batch_size):
                     self.classifier_.train_on_batch(X_batch, y_batch)
@@ -130,21 +134,33 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     else:
                         y_pred = np.vstack((y_pred, y_batch))
                     del X_batch, y_batch
-                cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]],
-                                       [len(X_tokenized_test[idx]) for idx in range(len(X_tokenized_test))])
+                cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
+                cur_accuracy = self.accuracy(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 del y_pred
                 if best_f1 is None:
                     best_f1 = cur_f1
+                    best_accuracy = cur_accuracy
                     self.classifier_.save_weights(tmp_file_name)
                     patience = 0
                 elif cur_f1 > best_f1:
                     best_f1 = cur_f1
+                    if best_accuracy < cur_accuracy:
+                        best_accuracy = cur_accuracy
+                    self.classifier_.save_weights(tmp_file_name)
+                    patience = 0
+                elif (abs(cur_f1 - best_f1) < K.epsilon()) and (cur_accuracy > best_accuracy):
+                    best_f1 = cur_f1
+                    if best_accuracy < cur_accuracy:
+                        best_accuracy = cur_accuracy
                     self.classifier_.save_weights(tmp_file_name)
                     patience = 0
                 else:
+                    if best_accuracy < cur_accuracy:
+                        best_accuracy = cur_accuracy
                     patience += 1
                 if self.verbose:
-                    print('{0:>{1}}  {2:>{3}.6f}'.format(epoch_idx, column_widths[0], cur_f1, column_widths[1]))
+                    print('{0:>{1}}  {2:>{3}.6f}  {4:>{5}.6f}'.format(epoch_idx, column_widths[0], cur_f1,
+                                                                      column_widths[1], cur_accuracy, column_widths[2]))
                 if patience >= MAX_PATIENCE:
                     if self.verbose:
                         print('Early stopping!')
@@ -599,6 +615,32 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         if n == 0:
             return 0.0
         return f1 / float(n)
+
+    @staticmethod
+    def accuracy(y_true: np.ndarray, y_pred: np.ndarray, lengths_of_texts: List[int]) -> float:
+        if not isinstance(y_true, np.ndarray):
+            raise ValueError('`y_true` is wrong! Expected `{0}`, got `{1}`.'.format(
+                type(np.array([1, 2])), type(y_true)))
+        if not isinstance(y_pred, np.ndarray):
+            raise ValueError('`y_pred` is wrong! Expected `{0}`, got `{1}`.'.format(
+                type(np.array([1, 2])), type(y_pred)))
+        if y_true.ndim != 3:
+            raise ValueError('`y_true` is wrong! Expected a 3-D array, but got a {0}-D one.'.format(y_true.ndim))
+        if y_true.shape != y_pred.shape:
+            raise ValueError('`y_pred` does not correspond to `y_true`. {0} != {1}.'.format(y_pred.shape, y_true.shape))
+        if len(lengths_of_texts) != y_true.shape[0]:
+            raise ValueError('`lengths_of_texts` does not correspond to `y_true`. {0} != {1}.'.format(
+                len(lengths_of_texts), y_true.shape[0]))
+        n = 0
+        n_correct = 0
+        for sample_idx in range(len(lengths_of_texts)):
+            for token_idx in range(lengths_of_texts[sample_idx]):
+                n += 1
+                if y_true[sample_idx][token_idx].argmax() == y_pred[sample_idx][token_idx].argmax():
+                    n_correct += 1
+        if n == 0:
+            return 0.0
+        return n_correct / float(n)
 
     @staticmethod
     def generate_batches(X: np.ndarray, y: Union[np.ndarray, None], batch_size: int, shuffle: bool=True):
