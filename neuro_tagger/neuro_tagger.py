@@ -321,7 +321,10 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     continue
                 if ne_end > max_text_len:
                     ne_end = max_text_len
-                ne_idx = self.named_entities_.index(ne_type)
+                try:
+                    ne_idx = self.named_entities_.index(ne_type)
+                except ValueError as e:
+                    raise ValueError(str(e) + ' `{0}` is unknown entity!'.format(ne_type))
                 y[text_idx, ne_start, ne_idx * 2 + 1] = 1.0
                 y[text_idx, ne_start, 0] = 0.0
                 for token_idx in range(ne_start + 1, ne_end):
@@ -516,7 +519,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                         break
                     idx -= 1
                 end_token_idx = indices[idx]
-                prepared.append((cur_label[0], start_token_idx, end_token_idx + 1))
+                prepared.append((cur_label[0].upper(), start_token_idx, end_token_idx + 1))
         return prepared
 
     @staticmethod

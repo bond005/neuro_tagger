@@ -238,9 +238,9 @@ class TestNeuroTagger(unittest.TestCase):
         )
         source_labels = [
             (('PER', 0, 4),),
-            (('ORG', 8, 15),),
+            (('org', 8, 15),),
             (('LOC', 29, 7),),
-            (('PER', 0, 12), ('LOC', 28, 12))
+            (('PER', 0, 12), ('loc', 28, 12))
         ]
         token_bounds = [
             ((0, 4), (5, 4), (10, 4)),
@@ -329,6 +329,21 @@ class TestNeuroTagger(unittest.TestCase):
         f1 = self.tagger.score(self.texts, self.labels)
         self.assertGreater(f1, 0.0)
         self.assertLessEqual(f1, 1.0)
+
+    def test_score(self):
+        self.tagger.fit(self.texts, self.labels)
+        new_texts = [
+            'Мама мыла раму',
+            'All bugs must be fixed!'
+        ]
+        new_labels = [
+            (('OPERATION', 5, 4), ('EQUIPMENT', 10, 4)),
+            (('OPERATION', 9, 13),)
+        ]
+        true_err_msg = re.escape('`y` is wrong! These entities are unknown: [{0}].'.format(
+            ', '.join(['EQUIPMENT', 'OPERATION'])))
+        with self.assertRaisesRegex(ValueError, true_err_msg):
+            _ = self.tagger.score(new_texts, new_labels)
 
     def test_serialize_fitted(self):
         self.tagger.fit(self.texts, self.labels)
