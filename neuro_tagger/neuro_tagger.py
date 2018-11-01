@@ -780,7 +780,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             for sample_idx in range(len(y)):
                 ne_bag = NeuroTagger.bag_of_named_entities(y[sample_idx], possible_named_entities)
                 frequencies_of_ne_bag[ne_bag] = frequencies_of_ne_bag.get(ne_bag, 0) + 1
-            if all(map(lambda ne_nag: frequencies_of_ne_bag[ne_bag] >= min_freq, frequencies_of_ne_bag.keys())):
+            if all(map(lambda ne_bag: frequencies_of_ne_bag[ne_bag] >= min_freq, frequencies_of_ne_bag.keys())):
                 break
             min_freq_ += 1
             possible_named_entities = set(filter(lambda it: frequencies_of_ne[it] >= min_freq_,
