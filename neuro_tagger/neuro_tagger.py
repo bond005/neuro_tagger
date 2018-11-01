@@ -3,7 +3,7 @@ import math
 import os
 import re
 import tempfile
-from typing import List, Tuple, Union
+from typing import List, Set, Tuple, Union
 
 from keras_contrib.layers import CRF
 import keras.backend as K
@@ -15,6 +15,7 @@ from nltk.tokenize.nist import NISTTokenizer
 import numpy as np
 from sklearn.base import ClassifierMixin, BaseEstimator
 from sklearn.metrics import f1_score
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
 import tensorflow_hub as hub
@@ -65,19 +66,13 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         y_ = self.labels_to_y(X, y, X_tokenized, self.max_text_len_)
         if self.verbose:
             print('All data have been prepared using ELMo.')
-        indices = np.arange(0, X_.shape[0], dtype=np.int32)
-        np.random.shuffle(indices)
-        n_validation_part = int(round(self.validation_part * X_.shape[0]))
-        if n_validation_part < 1:
-            raise ValueError('{0} is too small value for the validation part!'.format(self.validation_part))
-        if  n_validation_part >= X_.shape[0]:
-            raise ValueError('{0} is too large value for the validation part!'.format(self.validation_part))
-        X_train = X_[indices[n_validation_part:]]
-        y_train = y_[indices[n_validation_part:]]
-        X_test = X_[indices[:n_validation_part]]
-        y_test = y_[indices[:n_validation_part]]
+        train_index, test_index = self.stratified_split(X, y, self.validation_part)
+        X_train = X_[train_index]
+        y_train = y_[train_index]
+        X_test = X_[test_index]
+        y_test = y_[test_index]
         X_tokenized_test = []
-        for idx in indices[:n_validation_part]:
+        for idx in test_index:
             X_tokenized_test.append(X_tokenized[idx])
         del X_
         del y_
@@ -118,6 +113,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             epoch_idx = 0
             best_f1 = None
             patience = 0
+            MAX_PATIENCE = 5
             column_widths = [max(len(str(self.n_epochs)), len('Epoch')), max(8, len('F1-macro'))]
             if self.verbose:
                 print('{0:>{1}}  {2:>{3}}'.format('Epoch', column_widths[0], 'F1-macro', column_widths[1]))
@@ -149,11 +145,11 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     patience += 1
                 if self.verbose:
                     print('{0:>{1}}  {2:>{3}.6f}'.format(epoch_idx, column_widths[0], cur_f1, column_widths[1]))
-                if patience >= 3:
+                if patience >= MAX_PATIENCE:
                     if self.verbose:
                         print('Early stopping!')
                     break
-            if patience < 3:
+            if patience < MAX_PATIENCE:
                 if self.verbose:
                     print('Epochs number is exceeded.')
             if os.path.isfile(tmp_file_name):
@@ -765,3 +761,58 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         del fp
         return file_name
 
+    @staticmethod
+    def bag_of_named_entities(labels_of_text: tuple, possible_named_entities: set) -> str:
+        return ' '.join(sorted(list(set(filter(lambda it: it in possible_named_entities,
+                                               map(lambda cur_label: cur_label[0].upper(), labels_of_text))))))
+
+    @staticmethod
+    def select_main_named_entities(y: Union[list, tuple, np.ndarray], min_freq: int) -> Set[str]:
+        frequencies_of_ne = dict()
+        for sample_idx in range(len(y)):
+            for cur_ne in y[sample_idx]:
+                cur_ne_type = cur_ne[0].upper()
+                frequencies_of_ne[cur_ne_type] = frequencies_of_ne.get(cur_ne_type, 0) + 1
+        min_freq_ = min_freq
+        possible_named_entities = set(filter(lambda it: frequencies_of_ne[it] >= min_freq_, frequencies_of_ne.keys()))
+        while len(possible_named_entities) > 0:
+            frequencies_of_ne_bag = dict()
+            for sample_idx in range(len(y)):
+                ne_bag = NeuroTagger.bag_of_named_entities(y[sample_idx], possible_named_entities)
+                frequencies_of_ne_bag[ne_bag] = frequencies_of_ne_bag.get(ne_bag, 0) + 1
+            if all(map(lambda ne_nag: frequencies_of_ne_bag[ne_bag] >= min_freq, frequencies_of_ne_bag.keys())):
+                break
+            min_freq_ += 1
+            possible_named_entities = set(filter(lambda it: frequencies_of_ne[it] >= min_freq_,
+                                                 frequencies_of_ne.keys()))
+        return possible_named_entities
+
+    @staticmethod
+    def stratified_kfold(X: Union[list, tuple, np.ndarray], y: Union[list, tuple, np.ndarray],
+                         k: int) -> List[Tuple[np.ndarray, np.ndarray]]:
+        possible_named_entities = NeuroTagger.select_main_named_entities(y, k)
+        if len(possible_named_entities) == 0:
+            raise ValueError('The specified data cannot be splitted!')
+        skf = StratifiedKFold(n_splits=k, shuffle=True)
+        indices_for_cv = [
+            (train_index, test_index) for train_index, test_index in skf.split(
+                X, list(map(lambda it: NeuroTagger.bag_of_named_entities(it, possible_named_entities), y))
+            )
+        ]
+        return indices_for_cv
+
+    @staticmethod
+    def stratified_split(X: Union[list, tuple, np.ndarray], y: Union[list, tuple, np.ndarray],
+                         validation_part: float) -> Tuple[np.ndarray, np.ndarray]:
+        possible_named_entities = NeuroTagger.select_main_named_entities(y, 2)
+        if len(possible_named_entities) == 0:
+            raise ValueError('The specified data cannot be splitted!')
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=validation_part)
+        splits = [
+            (train_index, test_index) for train_index, test_index in sss.split(
+                X, list(map(lambda it: NeuroTagger.bag_of_named_entities(it, possible_named_entities), y))
+            )
+        ]
+        train_index = splits[0][0]
+        test_index = splits[0][1]
+        return train_index, test_index
