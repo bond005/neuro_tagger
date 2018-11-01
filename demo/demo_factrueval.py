@@ -62,7 +62,8 @@ def main():
             'Classifier for the FactRuEval-2016 cannot be loaded from the file `{0}`.'.format(model_name)
         print('Classifier for the FactRuEval-2016 has been loaded...')
     else:
-        texts_for_training, labels_for_training, _ = load_dataset_from_factrueval2016(factrueval_name)
+        texts_for_training, labels_for_training, _ = load_dataset_from_factrueval2016(
+            os.path.join(factrueval_name, 'devset'))
         print('Data for training have been loaded...')
         NeuroTagger.print_info_about_labels(labels_for_training)
         indices_for_cv = NeuroTagger.stratified_kfold(texts_for_training, labels_for_training, cv)
@@ -113,7 +114,10 @@ def main():
         print('Best parameters are: {0}.'.format(opt.best_params_))
         print('Best score is {0:.6f}.'.format(opt.best_score_))
     print('')
-    texts_for_testing, _, book_names = load_dataset_from_factrueval2016(factrueval_name)
+    texts_for_testing, labels_for_testing, book_names = load_dataset_from_factrueval2016(
+        os.path.join(factrueval_name, 'testset'))
+    print('Data for testing have been loaded...')
+    NeuroTagger.print_info_about_labels(labels_for_testing)
     predicted_labels = model_for_factrueval.predict(texts_for_testing)
     cur_book_name = ''
     fp = None
