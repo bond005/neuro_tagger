@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 import neuro_tagger
 
 long_description = '''
-neuro_tagger
+NeuroTagger
 ============
 
 Text tagger based on recurrent neural network. It can be used as NER,
