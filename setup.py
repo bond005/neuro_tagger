@@ -6,23 +6,25 @@ long_description = '''
 NeuroTagger
 ============
 
-Text tagger based on recurrent neural network. It can be used as NER,
-dependency parser, morphoanalyzer etc.
+NeuroTagger is a text tagger based on recurrent neural network. It can
+be used as NER, dependency parser, morphoanalyzer etc.
 
 The goal of this project is creation of a simple Python package with
 the sklearn-like interface for solution of different tasks of text
 tagging (named entity recognition, dependency parsing, etc) in case
 number of labeled texts is very small (not greater than several
-thousands). Special word embeddings named as ELMo (**E**mbeddings from
-**L**anguage **Mo**dels) ensure this possibility, because these
+thousands). Special word embeddings named as `ELMo<https://arxiv.org/abs/1802.05365>`_
+(Embeddings from Language Models) ensure this possibility, because these
 embeddings are contextual and they allow to design more simple and
 separable feature space for words in texts.
 
 ELMo embeddings are used as features of words in text, and different
 variants of neural network architecture (BiLSTM, hybrid BiLSTM-CRF or
 pure CRF) can be used as final classifier (tagger). I recommend to
-use a special *TensorFlow Hub ELMo* for English NLP tasks and a
-*DeepPavlov ELMo* for for same tasks in Russian.
+use a special `TensorFlow Hub ELMo<>https://tfhub.dev/google/elmo/2`_
+for English NLP tasks and a `DeepPavlov ELMo
+<http://docs.deeppavlov.ai/en/master/apiref/models/embedders.html#deeppavlov.models.embedders.elmo_embedder.ELMoEmbedder>`_
+for for same tasks in Russian.
 
 '''
 
