@@ -14,7 +14,7 @@ the sklearn-like interface for solution of different tasks of text
 tagging (named entity recognition, dependency parsing, etc) in case
 number of labeled texts is very small (not greater than several
 thousands). Special word embeddings named as `ELMo
-<https://arxiv.org/pdf/1802.05365.pdf>` (**E**mbeddings from **L**anguage
+<https://arxiv.org/pdf/1802.05365.pdf>`_ (**E**mbeddings from **L**anguage
 **Mo**dels) ensure this possibility, because these embeddings are
 contextual and they allow to design more simple and separable feature
 space for words in texts.
@@ -70,16 +70,17 @@ subdirectory:
 
 1. **demo_brat.py** - example of neuro-tagger creating and its
 cross-validated estimating on the labeled text corpus in the ``brat``
-format (`brat<http://brat.nlplab.org>`) is popular tool for manual
+format (`brat<http://brat.nlplab.org>`_) is popular tool for manual
 annotating of texts);
 
 2. **demo_factrueval.py** - example of experiments on the FactRuEval-2016
 text corpus, which is part of special competition devoted to named
 entity recognition and fact extraction in Russian (it is described in the
 paper `FactRuEval 2016: Evaluation of Named Entity Recognition and Fact
-Extraction Systems for Russian<http://www.dialog-21.ru/media/3430/starostinaetal.pdf>`).
-Use of `special ELMo<http://docs.deeppavlov.ai/en/master/apiref/models/embedders.html#deeppavlov.models.embedders.elmo_embedder.ELMoEmbedder>`
-from the `iPavlov project<https://ipavlov.ai>` and CRF as final classifier
+Extraction Systems for Russian<http://www.dialog-21.ru/media/3430/starostinaetal.pdf>`_).
+Use of `special ELMo
+<http://docs.deeppavlov.ai/en/master/apiref/models/embedders.html#deeppavlov.models.embedders.elmo_embedder.ELMoEmbedder>`_
+from the `iPavlov project<https://ipavlov.ai>`_ and CRF as final classifier
 allows to reach best result for first track of this competition (F1-score
 is greater than 0,89, and it is state-fo-the-art solution for named entity
 recognition in Russian).
@@ -98,8 +99,8 @@ long texts.
 
 For solving of above-mentioned problem you can split long texts by
 shorter sentences using well-known NLP libraries such as `NLTK
-<http://www.nltk.org/api/nltk.tokenize.html?highlight=sent_tokenize#nltk.tokenize.sent_tokenize>`
-or `SpaCy`<https://spacy.io/api/token#is_sent_start>`. Also, if you
+<http://www.nltk.org/api/nltk.tokenize.html?highlight=sent_tokenize#nltk.tokenize.sent_tokenize>`_
+or `SpaCy<https://spacy.io/api/token#is_sent_start>`_. Also, if you
 want to correctly split long text with its tag labels, then you can
 use the special function ``tokenize_all_by_sentences`` from the module
 ``neuro_tagger.dataset_loading``.
