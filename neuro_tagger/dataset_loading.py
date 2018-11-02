@@ -317,8 +317,6 @@ def load_document_from_factrueval2016(tokens_file_name: str, spans_file_name: st
                 new_text.append(token_id)
                 token_start = int(token_description[1])
                 token_length = int(token_description[2])
-                if (token_start > total_text_len) and (new_text_len == 0):
-                    total_text_len += (token_start - total_text_len)
                 tokens_dict[token_id] = (token_description[-1], 'O', token_start - total_text_len, token_length,
                                          (len(texts), len(new_text) - 1))
                 new_text_len = tokens_dict[token_id][2] + tokens_dict[token_id][3]
