@@ -105,7 +105,7 @@ def main():
     print('')
     del cls, opt
 
-    cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=True, verbose=True, batch_size=batch_size,
+    cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=True, verbose=2, batch_size=batch_size,
                       cached=True)
     opt = BayesSearchCV(
         cls,
