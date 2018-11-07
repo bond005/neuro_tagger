@@ -9,14 +9,13 @@ from keras_contrib.layers import CRF
 import keras.backend as K
 from keras.layers import Input, LSTM, Masking, Bidirectional, TimeDistributed, Dense
 from keras.losses import categorical_crossentropy
-from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import print_summary
 from nltk.tokenize.nist import NISTTokenizer
 import numpy as np
 from sklearn.base import ClassifierMixin, BaseEstimator
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, log_loss
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
@@ -93,14 +92,12 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 nn_output = crf(nn_output)
                 self.classifier_ = Model(nn_input, nn_output)
                 self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
-                loss_function = crf.loss_function
             else:
                 nn_output = TimeDistributed(Dense(len(self.named_entities_) * 2 + 1, activation='softmax',
                                                   name='dense_layer'), name='time_distr')(nn_output)
                 self.classifier_ = Model(nn_input, nn_output)
-                self.classifier_.compile(optimizer='rmsprop', loss=categorical_crossentropy,
-                                         metrics=[categorical_accuracy])
-                loss_function = categorical_crossentropy
+                self.classifier_.compile(optimizer='rmsprop', loss='categorical_crossentropy',
+                                         metrics=['categorical_accuracy'])
         else:
             crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                       kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
@@ -108,7 +105,6 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             nn_output = crf(nn_output)
             self.classifier_ = Model(nn_input, nn_output)
             self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
-            loss_function = crf.loss_function
         if self.verbose:
             print_summary(self.classifier_)
             print('')
@@ -141,7 +137,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     else:
                         y_pred = np.vstack((y_pred, y_batch))
                     del X_batch, y_batch
-                cur_loss = loss_function(y_test, y_pred[:y_test.shape[0]])
+                cur_loss = self.log_loss(y_test, y_pred, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 cur_accuracy = self.accuracy(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 del y_pred
@@ -603,6 +599,28 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 break
             token_end_ -= 1
         return token_start_, token_end_ - token_start_ + 1
+
+    @staticmethod
+    def log_loss(y_true: np.ndarray, y_pred: np.ndarray, lengths_of_texts: List[int]) -> float:
+        if not isinstance(y_true, np.ndarray):
+            raise ValueError('`y_true` is wrong! Expected `{0}`, got `{1}`.'.format(
+                type(np.array([1, 2])), type(y_true)))
+        if not isinstance(y_pred, np.ndarray):
+            raise ValueError('`y_pred` is wrong! Expected `{0}`, got `{1}`.'.format(
+                type(np.array([1, 2])), type(y_pred)))
+        if y_true.ndim != 3:
+            raise ValueError('`y_true` is wrong! Expected a 3-D array, but got a {0}-D one.'.format(y_true.ndim))
+        if y_true.shape != y_pred.shape:
+            raise ValueError('`y_pred` does not correspond to `y_true`. {0} != {1}.'.format(y_pred.shape, y_true.shape))
+        if len(lengths_of_texts) != y_true.shape[0]:
+            raise ValueError('`lengths_of_texts` does not correspond to `y_true`. {0} != {1}.'.format(
+                len(lengths_of_texts), y_true.shape[0]))
+        y_true_ = np.argmax(y_true[0], axis=-1)[0:lengths_of_texts[0]]
+        y_pred_ = y_pred[0][0:lengths_of_texts[0]]
+        for text_idx in range(1, len(lengths_of_texts)):
+            y_true_ = np.concatenate((y_true_, np.argmax(y_true[text_idx], axis=-1)[0:lengths_of_texts[text_idx]]))
+            y_pred_ = np.concatenate((y_pred_, y_pred[text_idx][0:lengths_of_texts[text_idx]]))
+        return log_loss(y_true_, y_pred_)
 
     @staticmethod
     def f1_macro(y_true: np.ndarray, y_pred: np.ndarray, lengths_of_texts: List[int]) -> float:
