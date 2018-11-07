@@ -137,7 +137,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     else:
                         y_pred = np.vstack((y_pred, y_batch))
                     del X_batch, y_batch
-                cur_loss = self.log_loss(y_test, y_pred, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
+                cur_loss = self.log_loss(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 cur_accuracy = self.accuracy(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 del y_pred
@@ -619,7 +619,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         y_pred_ = y_pred[0][0:lengths_of_texts[0]]
         for text_idx in range(1, len(lengths_of_texts)):
             y_true_ = np.concatenate((y_true_, np.argmax(y_true[text_idx], axis=-1)[0:lengths_of_texts[text_idx]]))
-            y_pred_ = np.concatenate((y_pred_, y_pred[text_idx][0:lengths_of_texts[text_idx]]))
+            y_pred_ = np.vstack((y_pred_, y_pred[text_idx][0:lengths_of_texts[text_idx]]))
         return log_loss(y_true_, y_pred_)
 
     @staticmethod
