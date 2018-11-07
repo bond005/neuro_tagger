@@ -69,7 +69,7 @@ def main():
         indices_for_cv = NeuroTagger.stratified_kfold(texts_for_training, labels_for_training, cv)
         if model_type == 'crf':
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=False, verbose=2, batch_size=batch_size,
-                              cached=True)
+                              cached=True, n_epochs=1000)
             opt = BayesSearchCV(
                 cls,
                 {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform')},
@@ -81,7 +81,7 @@ def main():
             )
         elif model_type == 'lstm':
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=False, use_lstm=True, verbose=2, batch_size=batch_size,
-                              cached=True)
+                              cached=True, n_epochs=1000)
             opt = BayesSearchCV(
                 cls,
                 {'dropout': Real(0.0, 0.8, prior='uniform'), 'recurrent_dropout': Real(0.0, 0.8, prior='uniform'),
@@ -94,7 +94,7 @@ def main():
             )
         else:
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=True, verbose=2, batch_size=batch_size,
-                              cached=True)
+                              cached=True, n_epochs=1000)
             opt = BayesSearchCV(
                 cls,
                 {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform'),
