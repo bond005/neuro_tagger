@@ -8,6 +8,8 @@ from typing import List, Set, Tuple, Union
 from keras_contrib.layers import CRF
 import keras.backend as K
 from keras.layers import Input, LSTM, Masking, Bidirectional, TimeDistributed, Dense
+from keras.losses import categorical_crossentropy
+from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import print_summary
@@ -91,12 +93,14 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 nn_output = crf(nn_output)
                 self.classifier_ = Model(nn_input, nn_output)
                 self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
+                loss_function = crf.loss_function
             else:
                 nn_output = TimeDistributed(Dense(len(self.named_entities_) * 2 + 1, activation='softmax',
                                                   name='dense_layer'), name='time_distr')(nn_output)
                 self.classifier_ = Model(nn_input, nn_output)
-                self.classifier_.compile(optimizer='rmsprop', loss='categorical_crossentropy',
-                                         metrics=['categorical_accuracy'])
+                self.classifier_.compile(optimizer='rmsprop', loss=categorical_crossentropy,
+                                         metrics=[categorical_accuracy])
+                loss_function = categorical_crossentropy
         else:
             crf = CRF(units=len(self.named_entities_) * 2 + 1, learn_mode='join', test_mode='viterbi',
                       kernel_regularizer=(l2(self.l2_kernel) if self.l2_kernel > 0.0 else None),
@@ -104,6 +108,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             nn_output = crf(nn_output)
             self.classifier_ = Model(nn_input, nn_output)
             self.classifier_.compile(optimizer='rmsprop', loss=crf.loss_function, metrics=[crf.accuracy])
+            loss_function = crf.loss_function
         if self.verbose:
             print_summary(self.classifier_)
             print('')
@@ -113,13 +118,15 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             epoch_idx = 0
             best_f1 = None
             best_accuracy = None
+            best_loss = None
             patience = 0
             MAX_PATIENCE = 5
-            column_widths = [max(len(str(self.n_epochs)), len('Epoch')), max(8, len('F1-macro')),
+            column_widths = [max(len(str(self.n_epochs)), len('Epoch')), max(8, len('Loss')), max(8, len('F1-macro')),
                              max(8, len('Accuracy'))]
             if self.verbose:
-                print('{0:>{1}}  {2:>{3}}  {4:>{5}}'.format('Epoch', column_widths[0], 'F1-macro', column_widths[1],
-                                                            'Accuracy', column_widths[2]))
+                print('{0:>{1}}  {2:>{3}}  {4:>{5}}  {6:>{7}}'.format(
+                    'Epoch', column_widths[0], 'Loss', column_widths[1], 'F1-macro', column_widths[2], 'Accuracy',
+                    column_widths[3]))
             lengths_of_texts_for_testing = [len(X_tokenized_test[idx]) for idx in range(len(X_tokenized_test))]
             while epoch_idx < self.n_epochs:
                 for X_batch, y_batch in self.generate_batches(X_train, y_train, self.batch_size):
@@ -134,24 +141,36 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     else:
                         y_pred = np.vstack((y_pred, y_batch))
                     del X_batch, y_batch
+                cur_loss = loss_function(y_test, y_pred[:y_test.shape[0]])
                 cur_f1 = self.f1_macro(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 cur_accuracy = self.accuracy(y_test, y_pred[:y_test.shape[0]], lengths_of_texts_for_testing)
                 del y_pred
-                if best_f1 is None:
+                if cur_loss is None:
                     best_f1 = cur_f1
                     best_accuracy = cur_accuracy
+                    best_loss = cur_loss
                     self.classifier_.save_weights(tmp_file_name)
                     patience = 0
-                elif cur_f1 > best_f1:
+                elif cur_loss < best_loss:
+                    best_loss = cur_loss
+                    if best_accuracy < cur_accuracy:
+                        best_accuracy = cur_accuracy
+                    if best_f1 < cur_f1:
+                        best_f1 = cur_f1
+                    self.classifier_.save_weights(tmp_file_name)
+                    patience = 0
+                elif (abs(cur_loss - best_loss) < K.epsilon()) and (cur_f1 > best_f1):
+                    best_loss = cur_loss
                     best_f1 = cur_f1
                     if best_accuracy < cur_accuracy:
                         best_accuracy = cur_accuracy
                     self.classifier_.save_weights(tmp_file_name)
                     patience = 0
-                elif (abs(cur_f1 - best_f1) < K.epsilon()) and (cur_accuracy > best_accuracy):
+                elif (abs(cur_loss - best_loss) < K.epsilon()) and (abs(cur_f1 - best_f1) < K.epsilon()) and \
+                        (cur_accuracy > best_accuracy):
+                    best_loss = cur_loss
                     best_f1 = cur_f1
-                    if best_accuracy < cur_accuracy:
-                        best_accuracy = cur_accuracy
+                    best_accuracy = cur_accuracy
                     self.classifier_.save_weights(tmp_file_name)
                     patience = 0
                 else:
@@ -159,8 +178,9 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                         best_accuracy = cur_accuracy
                     patience += 1
                 if self.verbose:
-                    print('{0:>{1}}  {2:>{3}.6f}  {4:>{5}.6f}'.format(epoch_idx, column_widths[0], cur_f1,
-                                                                      column_widths[1], cur_accuracy, column_widths[2]))
+                    print('{0:>{1}}  {2:>{3}.6f}  {4:>{5}.6f}  {6:>{7}.6f}'.format(
+                        epoch_idx, column_widths[0], cur_loss, column_widths[1], cur_f1, column_widths[2],
+                        cur_accuracy, column_widths[3]))
                 if patience >= MAX_PATIENCE:
                     if self.verbose:
                         print('Early stopping!')
