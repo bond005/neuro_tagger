@@ -120,10 +120,10 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertFalse(hasattr(other_tagger, 'embedding_size_'))
 
     def test_tokenize_1(self):
-        s = ['Мама мыла раму.', 'Папа мыл синхрофазотрон!']
+        s = ['Мама мыла раму.', 'Папа мыл синхрофазотрон!!!']
         true_tokens = [
-            ((0, 4), (5, 4), (10, 4)),
-            ((0, 4), (5, 3), (9, 14))
+            ((0, 4), (5, 4), (10, 4), (14, 1)),
+            ((0, 4), (5, 3), (9, 14), (23, 3))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
@@ -131,10 +131,10 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_2(self):
-        s = ('Мама мыла раму.', 'Папа мыл синхрофазотрон!')
+        s = ('Мама мыла раму.', 'Папа -- синхрофазотрон!')
         true_tokens = [
-            ((0, 4), (5, 4), (10, 4)),
-            ((0, 4), (5, 3), (9, 14))
+            ((0, 4), (5, 4), (10, 4), (14, 1)),
+            ((0, 4), (5, 2), (8, 14), (22, 1))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
@@ -144,8 +144,8 @@ class TestNeuroTagger(unittest.TestCase):
     def test_tokenize_3(self):
         s = np.array(['Мама мыла раму.', 'Папа мыл синхрофазотрон!'], dtype=object)
         true_tokens = [
-            ((0, 4), (5, 4), (10, 4)),
-            ((0, 4), (5, 3), (9, 14))
+            ((0, 4), (5, 4), (10, 4), (14, 1)),
+            ((0, 4), (5, 3), (9, 14), (23, 1))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
@@ -155,8 +155,8 @@ class TestNeuroTagger(unittest.TestCase):
     def test_tokenize_4(self):
         s = np.array(['Мама мыла раму _.', 'Папа мыл синхрофазотрон!'], dtype=object)
         true_tokens = [
-            ((0, 4), (5, 4), (10, 4)),
-            ((0, 4), (5, 3), (9, 14))
+            ((0, 4), (5, 4), (10, 4), (15, 1), (16, 1)),
+            ((0, 4), (5, 3), (9, 14), (23, 1))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)

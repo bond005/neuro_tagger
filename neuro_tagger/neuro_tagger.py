@@ -197,16 +197,36 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         for idx in range(len(X)):
             token_bounds_in_cur_text = []
             start_pos = 0
+            new_token = ''
             for cur_token in self.tokenizer_.international_tokenize(X[idx]):
-                found_pos = X[idx].find(cur_token, start_pos)
+                search_res = self.re_for_token_.search(cur_token)
+                if search_res is not None:
+                    is_alnum = ((search_res.start() >= 0) and (search_res.end() >= 0))
+                else:
+                    is_alnum = False
+                if is_alnum:
+                    if len(new_token) > 0:
+                        found_pos = X[idx].find(new_token, start_pos)
+                        if found_pos < 0:
+                            raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
+                        token_bounds_in_cur_text.append((found_pos, len(new_token)))
+                        start_pos = found_pos + len(new_token)
+                        new_token = ''
+                    found_pos = X[idx].find(cur_token, start_pos)
+                    if found_pos < 0:
+                        raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
+                    token_bounds_in_cur_text.append((found_pos, len(cur_token)))
+                    start_pos = found_pos + len(cur_token)
+                else:
+                    if len(new_token) == '':
+                        new_token = cur_token
+                    else:
+                        new_token += cur_token
+            if len(new_token) > 0:
+                found_pos = X[idx].find(new_token, start_pos)
                 if found_pos < 0:
                     raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
-                if not (set(cur_token) <= {'_'}):
-                    search_res = self.re_for_token_.search(cur_token)
-                    if search_res is not None:
-                        if (search_res.start() >= 0) and (search_res.end() >= 0):
-                            token_bounds_in_cur_text.append((found_pos, len(cur_token)))
-                start_pos = found_pos + len(cur_token)
+                token_bounds_in_cur_text.append((found_pos, len(new_token)))
             token_bounds_in_texts.append(tuple(token_bounds_in_cur_text))
             del token_bounds_in_cur_text
             doc_idx += 1
