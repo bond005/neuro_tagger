@@ -227,7 +227,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             )['elmo']
             for batch_idx in range(n_batches):
                 start_pos = batch_idx * self.batch_size
-                end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
+                end_pos = min(len(noncached_texts), (batch_idx + 1) * self.batch_size)
                 texts_in_batch = []
                 lengths_of_texts = []
                 for text_idx_ in range(start_pos, end_pos):
