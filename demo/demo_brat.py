@@ -57,8 +57,6 @@ def main():
     print('Maximal number of tokens in text is {0}.'.format(lengths_of_texts.max()))
     print('Mean number of tokens in text is {0} +- {1}.'.format(lengths_of_texts.mean(), lengths_of_texts.std()))
     print('')
-    print(texts[int(lengths_of_texts.argmax())])
-    print('')
     NeuroTagger.print_info_about_labels(labels)
     texts = np.array(texts, dtype=object)
     labels = np.array(labels, dtype=object)
