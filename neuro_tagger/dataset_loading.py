@@ -292,7 +292,7 @@ def load_dataset_from_brat(dir_name: str) -> Tuple[List[str], List[tuple]]:
 
 
 def load_document_from_factrueval2016(tokens_file_name: str, spans_file_name: str,
-                                      objects_file_name: str) -> Tuple[List[str], List[tuple]]:
+                                      objects_file_name: str) -> Tuple[List[str], List[tuple], List[tuple]]:
     texts = []
     new_text = []
     tokens_dict = dict()
@@ -440,10 +440,12 @@ def load_document_from_factrueval2016(tokens_file_name: str, spans_file_name: st
             cur_line = fp.readline()
             line_idx += 1
     list_of_texts = []
+    list_of_token_bounds = []
     list_of_labels = []
     for tokens_sequence in texts:
         new_text = ''
         new_labels_sequence = []
+        token_bounds_of_new_text = []
         start_idx = -1
         end_idx = -1
         ne_type = ''
@@ -466,14 +468,21 @@ def load_document_from_factrueval2016(tokens_file_name: str, spans_file_name: st
                     ne_type = tokens_dict[token_id][1][2:]
                 else:
                     end_idx = tokens_dict[token_id][2] + tokens_dict[token_id][3]
+            token_bounds_of_new_text.append(
+                (
+                    tokens_dict[token_id][2],
+                    tokens_dict[token_id][2] + tokens_dict[token_id][3]
+                )
+            )
         if ne_type != '':
             new_labels_sequence.append((ne_type, start_idx, end_idx - start_idx))
         list_of_labels.append(tuple(new_labels_sequence))
         list_of_texts.append(new_text)
-    return list_of_texts, list_of_labels
+        list_of_token_bounds.append(tuple(token_bounds_of_new_text))
+    return list_of_texts, list_of_token_bounds, list_of_labels
 
 
-def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tuple], List[str]]:
+def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tuple], List[tuple], List[str]]:
 
     def get_file_ID(src_name: str) -> int:
         point_pos_ = src_name.find('.')
@@ -490,6 +499,7 @@ def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tup
     if (len(names_of_files) % 6) != 0:
         raise ValueError('The directory `{0}` contains wrong data!'.format(dir_name))
     list_of_all_texts = []
+    list_of_token_bounds_in_texts = []
     list_of_all_labels = []
     list_of_all_names = []
     for idx in range(len(names_of_files) // 6):
@@ -509,9 +519,11 @@ def load_dataset_from_factrueval2016(dir_name: str) -> Tuple[List[str], List[tup
         objects_file_name = os.path.join(dir_name, prepared_base_name + '.objects')
         if not os.path.isfile(objects_file_name):
             raise ValueError('The file `{0}` does not exist!'.format(objects_file_name))
-        list_of_texts, list_of_labels = load_document_from_factrueval2016(tokens_file_name, spans_file_name,
-                                                                          objects_file_name)
+        list_of_texts, token_bounds, list_of_labels = load_document_from_factrueval2016(
+            tokens_file_name, spans_file_name, objects_file_name
+        )
         list_of_all_texts += list_of_texts
+        list_of_token_bounds_in_texts += token_bounds
         list_of_all_labels += list_of_labels
         list_of_all_names += [prepared_base_name] * len(list_of_texts)
-    return list_of_all_texts, list_of_all_labels, list_of_all_names
+    return list_of_all_texts, list_of_token_bounds_in_texts, list_of_all_labels, list_of_all_names

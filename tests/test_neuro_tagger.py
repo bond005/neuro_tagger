@@ -12,11 +12,13 @@ import numpy as np
 
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
+    from neuro_tagger.tokenizer import DefaultTokenizer, BaseTokenizer
     from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
     from neuro_tagger.dataset_loading import tokenize_all_by_sentences
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
+    from neuro_tagger.tokenizer import DefaultTokenizer, BaseTokenizer
     from neuro_tagger.dataset_loading import load_dataset_from_brat, load_dataset_from_factrueval2016
     from neuro_tagger.dataset_loading import tokenize_all_by_sentences
 
@@ -37,7 +39,8 @@ class TestNeuroTagger(unittest.TestCase):
         self.tagger = NeuroTagger(
             elmo_name=self.elmo_model_name,
             n_units=16, dropout=0.5, recurrent_dropout=0.0, l2_kernel=1e-3, l2_chain=0.0, n_epochs=10,
-            validation_part=(1.0 / 6.0), batch_size=2, verbose=True, use_crf=True, use_lstm=True
+            validation_part=(1.0 / 6.0), batch_size=2, verbose=True, use_crf=True, use_lstm=True,
+            tokenizer=DefaultTokenizer()
         )
         self.texts, self.labels = self.load_dataset(
             os.path.join(os.path.dirname(__file__), 'testdata', 'labeled_data_for_testing.txt')
@@ -52,6 +55,7 @@ class TestNeuroTagger(unittest.TestCase):
     def test_create(self):
         self.assertIsInstance(self.tagger, NeuroTagger)
         self.assertTrue(hasattr(self.tagger, 'elmo_name'))
+        self.assertTrue(hasattr(self.tagger, 'tokenizer'))
         self.assertTrue(hasattr(self.tagger, 'n_units'))
         self.assertTrue(hasattr(self.tagger, 'dropout'))
         self.assertTrue(hasattr(self.tagger, 'recurrent_dropout'))
@@ -63,6 +67,7 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(hasattr(self.tagger, 'verbose'))
         self.assertTrue(hasattr(self.tagger, 'use_crf'))
         self.assertTrue(hasattr(self.tagger, 'use_lstm'))
+        self.assertIsInstance(self.tagger.tokenizer, BaseTokenizer)
         self.assertEqual(self.tagger.elmo_name, self.elmo_model_name)
         self.assertEqual(self.tagger.n_units, 16)
         self.assertAlmostEqual(self.tagger.dropout, 0.5)
@@ -75,7 +80,6 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(self.tagger.verbose)
         self.assertTrue(self.tagger.use_crf)
         self.assertTrue(self.tagger.use_lstm)
-        self.assertFalse(hasattr(self.tagger, 'tokenizer_'))
         self.assertFalse(hasattr(self.tagger, 'elmo_'))
         self.assertFalse(hasattr(self.tagger, 'classifier_'))
         self.assertFalse(hasattr(self.tagger, 'named_entities_'))
@@ -89,6 +93,7 @@ class TestNeuroTagger(unittest.TestCase):
             other_tagger = pickle.load(fp)
         self.assertIsInstance(other_tagger, NeuroTagger)
         self.assertTrue(hasattr(other_tagger, 'elmo_name'))
+        self.assertTrue(hasattr(other_tagger, 'tokenizer'))
         self.assertTrue(hasattr(other_tagger, 'n_units'))
         self.assertTrue(hasattr(other_tagger, 'dropout'))
         self.assertTrue(hasattr(other_tagger, 'recurrent_dropout'))
@@ -100,6 +105,7 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(hasattr(other_tagger, 'verbose'))
         self.assertTrue(hasattr(other_tagger, 'use_crf'))
         self.assertTrue(hasattr(other_tagger, 'use_lstm'))
+        self.assertIsInstance(other_tagger.tokenizer, BaseTokenizer)
         self.assertEqual(other_tagger.elmo_name, self.elmo_model_name)
         self.assertEqual(other_tagger.n_units, 16)
         self.assertAlmostEqual(other_tagger.dropout, 0.5)
@@ -112,7 +118,6 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(other_tagger.verbose)
         self.assertTrue(other_tagger.use_crf)
         self.assertTrue(other_tagger.use_lstm)
-        self.assertFalse(hasattr(other_tagger, 'tokenizer_'))
         self.assertFalse(hasattr(other_tagger, 'elmo_'))
         self.assertFalse(hasattr(other_tagger, 'classifier_'))
         self.assertFalse(hasattr(other_tagger, 'named_entities_'))
@@ -123,23 +128,21 @@ class TestNeuroTagger(unittest.TestCase):
         s = ['Мама мыла раму.', 'Папа мыл синхрофазотрон!!!']
         true_tokens = [
             ((0, 4), (5, 4), (10, 4), (14, 1)),
-            ((0, 4), (5, 3), (9, 14), (23, 3))
+            ((0, 4), (5, 3), (9, 14), (23, 1), (24, 1), (25, 1))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
         self.assertEqual(true_tokens, predicted_tokens)
-        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_2(self):
         s = ('Мама мыла раму.', 'Папа -- синхрофазотрон!')
         true_tokens = [
             ((0, 4), (5, 4), (10, 4), (14, 1)),
-            ((0, 4), (5, 2), (8, 14), (22, 1))
+            ((0, 4), (5, 1), (6, 1), (8, 14), (22, 1))
         ]
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
         self.assertEqual(true_tokens, predicted_tokens)
-        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_3(self):
         s = np.array(['Мама мыла раму.', 'Папа мыл синхрофазотрон!'], dtype=object)
@@ -150,7 +153,6 @@ class TestNeuroTagger(unittest.TestCase):
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
         self.assertEqual(true_tokens, predicted_tokens)
-        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_4(self):
         s = np.array(['Мама мыла раму _.', 'Папа мыл синхрофазотрон!'], dtype=object)
@@ -161,7 +163,6 @@ class TestNeuroTagger(unittest.TestCase):
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
         self.assertEqual(true_tokens, predicted_tokens)
-        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
 
     def test_tokenize_5(self):
         s = []
@@ -169,7 +170,31 @@ class TestNeuroTagger(unittest.TestCase):
         predicted_tokens = self.tagger.tokenize(s)
         self.assertIsInstance(predicted_tokens, list)
         self.assertEqual(true_tokens, predicted_tokens)
-        self.assertTrue(hasattr(self.tagger, 'tokenizer_'))
+
+    def test_tokenize_6(self):
+        s = [
+            'Paper Title: ____________________________________________________________________________________________'
+            '________________________ _______________________________________________________________________________'
+            '______________________________________________ Author(s): _______________________________________________'
+            '______________________________________________________________________ _________________________________'
+            '____________________________________________________________________________________________ Speaker: '
+        ]
+        true_tokens = [
+            ((0, 5), (6, 5), (11, 1), (13, 1), (14, 1), (15, 1), (256, 6), (262, 1), (263, 1), (264, 1), (265, 1),
+             (267, 1), (268, 1), (269, 1), (511, 7), (518, 1))
+        ]
+        predicted_tokens = self.tagger.tokenize(s)
+        self.assertIsInstance(predicted_tokens, list)
+        self.assertEqual(true_tokens, predicted_tokens)
+
+    def test_tokenize_7(self):
+        s = ['мама мыла . . . . . . . . . . . . . раму']
+        true_tokens = [
+            ((0, 4), (5, 4), (10, 1), (12, 1), (14, 1), (36, 4))
+        ]
+        predicted_tokens = self.tagger.tokenize(s)
+        self.assertIsInstance(predicted_tokens, list)
+        self.assertEqual(true_tokens, predicted_tokens)
 
     def test_texts_to_X_1(self):
         source_texts = [
@@ -454,7 +479,6 @@ class TestNeuroTagger(unittest.TestCase):
     def test_fit_predict_score(self):
         res = self.tagger.fit(self.texts, self.labels)
         self.assertIsInstance(res, NeuroTagger)
-        self.assertTrue(hasattr(res, 'tokenizer_'))
         self.assertTrue(hasattr(res, 'elmo_'))
         self.assertTrue(hasattr(res, 'classifier_'))
         self.assertTrue(hasattr(res, 'named_entities_'))
@@ -499,6 +523,7 @@ class TestNeuroTagger(unittest.TestCase):
             other_tagger = pickle.load(fp)
         self.assertIsInstance(other_tagger, NeuroTagger)
         self.assertTrue(hasattr(other_tagger, 'elmo_name'))
+        self.assertTrue(hasattr(other_tagger, 'tokenizer'))
         self.assertTrue(hasattr(other_tagger, 'n_units'))
         self.assertTrue(hasattr(other_tagger, 'dropout'))
         self.assertTrue(hasattr(other_tagger, 'recurrent_dropout'))
@@ -510,6 +535,7 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(hasattr(other_tagger, 'verbose'))
         self.assertTrue(hasattr(other_tagger, 'use_crf'))
         self.assertTrue(hasattr(other_tagger, 'use_lstm'))
+        self.assertIsInstance(other_tagger.tokenizer, BaseTokenizer)
         self.assertEqual(other_tagger.elmo_name, self.elmo_model_name)
         self.assertEqual(other_tagger.n_units, 16)
         self.assertAlmostEqual(other_tagger.dropout, 0.5)
@@ -522,7 +548,6 @@ class TestNeuroTagger(unittest.TestCase):
         self.assertTrue(other_tagger.verbose)
         self.assertTrue(other_tagger.use_crf)
         self.assertTrue(other_tagger.use_lstm)
-        self.assertFalse(hasattr(other_tagger, 'tokenizer_'))
         self.assertFalse(hasattr(other_tagger, 'elmo_'))
         self.assertTrue(hasattr(other_tagger, 'classifier_'))
         self.assertTrue(hasattr(other_tagger, 'named_entities_'))
@@ -772,6 +797,31 @@ class TestNeuroTagger(unittest.TestCase):
             ' В конце концов эстонская полиция наткнулась на грузовик с водкой и в ходе разбирательств вышла на '
             '"водкопровод".'
         ]
+        true_bounds_of_tokens = [
+            ((0, 7), (8, 9), (10, 16), (17, 23), (24, 25), (26, 30), (31, 37)),
+            ((2, 4), (5, 15), (16, 27), (28, 35), (36, 48), (49, 50), (51, 62), (63, 68), (69, 75), (76, 77), (78, 84),
+             (85, 92), (93, 100), (101, 111), (112, 113), (114, 126), (127, 135), (136, 147), (148, 151), (152, 158),
+             (159, 170), (171, 182), (182, 183)),
+            ((1, 10), (11, 21), (22, 27), (28, 35), (36, 50), (51, 52), (53, 66), (67, 79), (79, 80)),
+            ((0, 10), (11, 16), (17, 27), (28, 37), (38, 48), (49, 54), (55, 57), (58, 63), (64, 70), (71, 83),
+             (84, 98), (98, 99)),
+            ((2, 11), (12, 15), (16, 22), (23, 27), (28, 32), (32, 33), (34, 36), (37, 43), (44, 50), (51, 60),
+             (61, 67), (68, 78), (79, 88), (89, 94), (95, 96), (97, 107), (108, 117), (117, 118), (119, 132),
+             (133, 134), (135, 139), (140, 148), (148, 149)),
+            ((1, 8), (9, 18), (19, 30), (30, 31)),
+            ((2, 6), (7, 16), (17, 28), (29, 34), (35, 46), (47, 49), (50, 54), (55, 64), (65, 70), (71, 78), (79, 80),
+             (80, 87), (87, 88), (88, 89), (90, 95), (96, 105), (106, 113), (114, 116), (117, 120), (121, 130),
+             (131, 138), (138, 139)),
+            ((1, 2), (3, 10), (11, 15), (16, 20), (21, 22), (22, 36), (36, 37), (37, 38), (39, 50), (51, 61), (62, 67),
+             (68, 79), (80, 84), (85, 90), (91, 92), (93, 100), (101, 106), (107, 120), (121, 126), (127, 131),
+             (132, 142), (142, 143), (144, 147), (148, 155), (156, 157), (158, 163), (164, 179), (179, 180)),
+            ((1, 12), (13, 25), (26, 28), (29, 31), (32, 38), (39, 43), (44, 46), (47, 51), (52, 53), (54, 60),
+             (61, 71), (72, 77), (78, 83), (84, 88), (89, 94), (94, 95)),
+            ((1, 3), (4, 7), (8, 9), (10, 12), (13, 24), (25, 29), (30, 43), (43, 44), (45, 47), (48, 55), (56, 60),
+             (61, 62), (63, 70), (70, 71), (72, 76), (77, 78), (79, 84), (85, 89), (90, 95), (95, 96)),
+            ((1, 2), (3, 8), (9, 15), (16, 25), (26, 33), (34, 44), (45, 47), (48, 56), (57, 58), (59, 65), (66, 67),
+             (68, 69), (70, 74), (75, 89), (90, 95), (96, 98), (99, 100), (100, 111), (111, 112), (112, 113))
+        ]
         true_labels = [
             (('LOC', 17, 6), ('ORG', 26, 11)),
             (('LOC', 69, 6), ('LOC', 78, 6), ('PER', 85, 15), ('LOC', 152, 6), ('PER', 159, 23)),
@@ -787,8 +837,10 @@ class TestNeuroTagger(unittest.TestCase):
         ]
         true_names = ['book_58', 'book_58', 'book_58', 'book_146', 'book_146', 'book_146', 'book_146', 'book_146',
                       'book_146', 'book_146', 'book_146']
-        loaded_texts, loaded_labels, loaded_names = load_dataset_from_factrueval2016(factrueval_data_path)
+        loaded_texts, loaded_bounds_of_tokens, loaded_labels, loaded_names = load_dataset_from_factrueval2016(
+            factrueval_data_path)
         self.assertEqual(true_texts, loaded_texts)
+        self.assertEqual(true_bounds_of_tokens, loaded_bounds_of_tokens)
         self.assertEqual(true_labels, loaded_labels)
         self.assertEqual(true_names, loaded_names)
 

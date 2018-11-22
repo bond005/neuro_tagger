@@ -1,7 +1,6 @@
 import copy
 import math
 import os
-import re
 import tempfile
 from typing import List, Set, Tuple, Union
 
@@ -12,7 +11,6 @@ from keras.layers import Input, LSTM, Masking, Bidirectional, TimeDistributed, D
 from keras.models import Model
 from keras.regularizers import l2
 from keras.utils import print_summary
-from nltk.tokenize.nist import NISTTokenizer
 import numpy as np
 from sklearn.base import ClassifierMixin, BaseEstimator
 from sklearn.metrics import f1_score, log_loss
@@ -21,14 +19,16 @@ from sklearn.utils.validation import check_is_fitted
 import tensorflow as tf
 import tensorflow_hub as hub
 
+from neuro_tagger.tokenizer import BaseTokenizer
+
 
 class NeuroTagger(ClassifierMixin, BaseEstimator):
     CACHE = None
 
-    def __init__(self, elmo_name: str, n_units: int=512, dropout: float=0.7, recurrent_dropout: float=0.0,
-                 l2_kernel: float=1e-3, l2_chain: float=1e-6, n_epochs: int=100, validation_part: float=0.2,
-                 batch_size: int=32, use_lstm: bool=False, use_crf: bool=True, verbose: Union[int, bool]=True,
-                 cached: bool=False):
+    def __init__(self, elmo_name: str, tokenizer: BaseTokenizer, n_units: int=512, dropout: float=0.7,
+                 recurrent_dropout: float=0.0, l2_kernel: float=1e-3, l2_chain: float=1e-6, n_epochs: int=100,
+                 validation_part: float=0.2, batch_size: int=32, use_lstm: bool=False, use_crf: bool=True,
+                 verbose: Union[int, bool]=True, cached: bool=False):
         self.elmo_name = elmo_name
         self.n_units = n_units
         self.dropout = dropout
@@ -42,6 +42,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.use_crf = use_crf
         self.batch_size = batch_size
         self.cached = cached
+        self.tokenizer = tokenizer
 
     def __del__(self):
         if (hasattr(self, 'elmo_') or hasattr(self, 'classifier_')):
@@ -50,8 +51,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             if hasattr(self, 'classifier_'):
                 del self.classifier_
             K.clear_session()
-        if hasattr(self, 'tokenizer_'):
-            del self.tokenizer_
+        if hasattr(self, 'tokenizer'):
+            del self.tokenizer
 
     def fit(self, X: Union[list, tuple, np.ndarray], y: Union[list, tuple, np.ndarray]):
         self.check_params(**self.get_params(deep=False))
@@ -191,68 +192,28 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         return self.f1_macro(y_true, y_pred, [len(X_tokenized[idx]) for idx in range(len(X_tokenized))])
 
     def tokenize(self, X: Union[list, tuple, np.ndarray]) -> List[tuple]:
-        self.update_tokenizer()
-        token_bounds_in_texts = []
-        doc_idx = 0
-        for idx in range(len(X)):
-            token_bounds_in_cur_text = []
-            start_pos = 0
-            new_token = ''
-            for cur_token in self.tokenizer_.international_tokenize(X[idx]):
-                search_res = self.re_for_token_.search(cur_token)
-                if search_res is not None:
-                    is_alnum = ((search_res.start() >= 0) and (search_res.end() >= 0))
-                else:
-                    is_alnum = False
-                if is_alnum:
-                    if len(new_token) > 0:
-                        found_pos = X[idx].find(new_token, start_pos)
-                        if found_pos < 0:
-                            raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
-                        token_bounds_in_cur_text.append((found_pos, len(new_token)))
-                        start_pos = found_pos + len(new_token)
-                        new_token = ''
-                    found_pos = X[idx].find(cur_token, start_pos)
-                    if found_pos < 0:
-                        raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
-                    token_bounds_in_cur_text.append((found_pos, len(cur_token)))
-                    start_pos = found_pos + len(cur_token)
-                else:
-                    if len(new_token) == '':
-                        new_token = cur_token
-                    else:
-                        new_token += cur_token
-            if len(new_token) > 0:
-                found_pos = X[idx].find(new_token, start_pos)
-                if found_pos < 0:
-                    raise ValueError('Text `{0}` cannot be tokenized!'.format(X[idx]))
-                token_bounds_in_cur_text.append((found_pos, len(new_token)))
-            token_bounds_in_texts.append(tuple(token_bounds_in_cur_text))
-            del token_bounds_in_cur_text
-            doc_idx += 1
-        return token_bounds_in_texts
+        return [tuple(self.tokenizer.tokenize(X[idx])) for idx in range(len(X))]
 
     def texts_to_X(self, texts: Union[list, tuple, np.ndarray], token_bounds_in_all_texts: List[tuple],
                    max_text_len: int) -> np.ndarray:
-        if self.cached:
-            if self.CACHE is None:
-                X = None
+        cached_texts = list()
+        noncached_texts = list()
+        for text_idx in range(len(texts)):
+            cur_text = texts[text_idx]
+            if self.cached:
+                if self.CACHE is None:
+                    noncached_texts.append(text_idx)
+                else:
+                    if cur_text in self.CACHE:
+                        cached_texts.append(text_idx)
+                    else:
+                        noncached_texts.append(text_idx)
             else:
-                if isinstance(texts, np.ndarray):
-                    key = tuple(texts.tolist())
-                elif not isinstance(texts, tuple):
-                    key = tuple(texts)
-                else:
-                    key = texts
-                if key in self.CACHE:
-                    X = self.CACHE[key]
-                else:
-                    X = None
-        else:
-            X = None
-        if X is None:
-            embedding_size = None
-            n_batches = int(math.ceil(len(texts) / float(self.batch_size)))
+                noncached_texts.append(text_idx)
+        X = None
+        embedding_size = None
+        if len(noncached_texts) > 0:
+            n_batches = int(math.ceil(len(noncached_texts) / float(self.batch_size)))
             sess = K.get_session()
             tokens_ph = tf.placeholder(shape=(None, None), dtype=tf.string, name='tokens')
             tokens_length_ph = tf.placeholder(shape=(None,), dtype=tf.int32, name='tokens_length')
@@ -269,7 +230,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 end_pos = min(len(texts), (batch_idx + 1) * self.batch_size)
                 texts_in_batch = []
                 lengths_of_texts = []
-                for text_idx in range(start_pos, end_pos):
+                for text_idx_ in range(start_pos, end_pos):
+                    text_idx = noncached_texts[text_idx_]
                     new_text = [texts[text_idx][token_bounds[0]:(token_bounds[0] + token_bounds[1])]
                                 for token_bounds in token_bounds_in_all_texts[text_idx]]
                     if len(new_text) > max_text_len:
@@ -290,21 +252,25 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 if X is None:
                     X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
                 for idx in range(end_pos - start_pos):
-                    text_idx = start_pos + idx
+                    text_idx = noncached_texts[start_pos + idx]
                     for token_idx in range(min(max_text_len, len(token_bounds_in_all_texts[text_idx]))):
                         X[text_idx][token_idx] = embeddings_of_texts_as_numpy[idx][token_idx]
+                    if self.cached:
+                        if self.CACHE is None:
+                            self.CACHE = {texts[text_idx]: embeddings_of_texts_as_numpy[idx]}
+                        else:
+                            self.CACHE[texts[text_idx]] = embeddings_of_texts_as_numpy[idx]
                 del embeddings_of_texts_as_numpy, texts_in_batch, lengths_of_texts
-            if self.cached:
-                if isinstance(texts, np.ndarray):
-                    key = tuple(texts.tolist())
-                elif not isinstance(texts, tuple):
-                    key = tuple(texts)
-                else:
-                    key = texts
-                if self.CACHE is None:
-                    self.CACHE = {key: X}
-                else:
-                    self.CACHE[key] = X
+        if len(cached_texts) > 0:
+            for text_idx in cached_texts:
+                vectors_of_text = self.CACHE[texts[text_idx]]
+                if embedding_size is None:
+                    embedding_size = vectors_of_text.shape[1]
+                if X is None:
+                    X = np.zeros((len(texts), max_text_len, embedding_size), dtype=np.float32)
+                for token_idx in range(min(vectors_of_text.shape[0], max_text_len,
+                                           len(token_bounds_in_all_texts[text_idx]))):
+                    X[text_idx][token_idx] = vectors_of_text[token_idx]
         return X
 
     def labels_to_y(self, texts: Union[list, tuple, np.ndarray], labels: Union[list, tuple, np.ndarray],
@@ -330,12 +296,6 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                     y[text_idx, token_idx, 0] = 0.0
         return y
 
-    def update_tokenizer(self):
-        if not hasattr(self, 'tokenizer_'):
-            self.tokenizer_ = NISTTokenizer()
-        if not hasattr(self, 're_for_token_'):
-            self.re_for_token_ = re.compile('[\w]+', re.U)
-
     def update_elmo(self):
         if not hasattr(self, 'elmo_'):
             self.elmo_ = hub.Module(self.elmo_name, trainable=True)
@@ -345,7 +305,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 'recurrent_dropout': self.recurrent_dropout, 'l2_kernel': self.l2_kernel, 'l2_chain': self.l2_chain,
                 'n_epochs': self.n_epochs, 'validation_part': self.validation_part, 'verbose': self.verbose,
                 'batch_size': self.batch_size, 'use_lstm': self.use_lstm, 'use_crf': self.use_crf,
-                'cached': self.cached}
+                'cached': self.cached, 'tokenizer': copy.deepcopy(self.tokenizer) if deep else self.tokenizer}
 
     def set_params(self, **params):
         for parameter, value in params.items():
@@ -433,7 +393,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             raise ValueError('`new_params` is wrong! Expected `{0}`, got `{1}`.'.format(type({0: 1}), type(new_params)))
         self.check_params(**new_params)
         expected_param_keys = {'elmo_name', 'n_units', 'dropout', 'recurrent_dropout', 'l2_kernel', 'l2_chain',
-                               'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf', 'use_lstm', 'cached'}
+                               'n_epochs', 'validation_part', 'verbose', 'batch_size', 'use_crf', 'use_lstm', 'cached',
+                               'tokenizer'}
         params_after_training = {'weights', 'named_entities_', 'max_text_len_', 'embedding_size_'}
         is_fitted = len(set(new_params.keys())) > len(expected_param_keys)
         if is_fitted:
@@ -452,6 +413,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.use_crf = new_params['use_crf']
         self.use_lstm = new_params['use_lstm']
         self.cached = new_params['cached']
+        self.tokenizer = new_params['tokenizer']
         if is_fitted:
             if not isinstance(new_params['named_entities_'], tuple):
                 raise ValueError('`named_entities_` is wrong! Expected `{0}`, got `{1}`.'.format(
@@ -745,6 +707,11 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
             raise ValueError('`use_lstm` must be `{0}`, not `{1}`.'.format(type(True), type(kwargs['use_lstm'])))
         if (not kwargs['use_lstm']) and (not kwargs['use_crf']):
             raise ValueError('`use_lstm` or `use_crf` must be True.')
+        if 'tokenizer' not in kwargs:
+            raise ValueError('`tokenizer` is not found!')
+        if not isinstance(kwargs['tokenizer'], BaseTokenizer):
+            raise ValueError('`tokenizer` must be `BaseTokenizer` or its child, not `{0}`.'.format(
+                type(kwargs['verbose'])))
 
     @staticmethod
     def get_temp_name() -> str:

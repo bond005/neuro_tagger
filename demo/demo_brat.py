@@ -10,10 +10,12 @@ from skopt.space import Real, Integer
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_brat, tokenize_all_by_sentences
+    from neuro_tagger.tokenizer import DefaultTokenizer
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_brat, tokenize_all_by_sentences
+    from neuro_tagger.tokenizer import DefaultTokenizer
 
 
 def main():
@@ -50,13 +52,20 @@ def main():
 
     texts, labels = load_dataset_from_brat(data_name)
     texts, labels = tokenize_all_by_sentences(texts, labels)
+    lengths_of_texts = np.array([len(cur.split()) for cur in texts], dtype=np.int32)
+    print('Total number of texts is {0}.'.format(len(lengths_of_texts)))
+    print('Maximal number of tokens in text is {0}.'.format(lengths_of_texts.max()))
+    print('Mean number of tokens in text is {0} +- {1}.'.format(lengths_of_texts.mean(), lengths_of_texts.std()))
+    print('')
+    print(texts[int(lengths_of_texts.argmax())])
+    print('')
     NeuroTagger.print_info_about_labels(labels)
     texts = np.array(texts, dtype=object)
     labels = np.array(labels, dtype=object)
     indices_for_cv = NeuroTagger.stratified_kfold(texts, labels, cv)
 
     cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=False, verbose=True, batch_size=batch_size,
-                      cached=True, n_epochs=1000)
+                      cached=True, n_epochs=1000, tokenizer=DefaultTokenizer())
     opt = BayesSearchCV(
         cls,
         {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform')},
@@ -80,7 +89,7 @@ def main():
     del cls, opt
 
     cls = NeuroTagger(elmo_name=elmo_name, use_crf=False, use_lstm=True, verbose=True, batch_size=batch_size,
-                      cached=True, n_epochs=1000)
+                      cached=True, n_epochs=1000, tokenizer=DefaultTokenizer())
     opt = BayesSearchCV(
         cls,
         {'dropout': Real(0.0, 0.8, prior='uniform'), 'recurrent_dropout': Real(0.0, 0.8, prior='uniform'),
@@ -106,7 +115,7 @@ def main():
     del cls, opt
 
     cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=True, verbose=2, batch_size=batch_size,
-                      cached=True, n_epochs=1000)
+                      cached=True, n_epochs=1000, tokenizer=DefaultTokenizer())
     opt = BayesSearchCV(
         cls,
         {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform'),

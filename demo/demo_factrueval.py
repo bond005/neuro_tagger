@@ -10,10 +10,12 @@ from skopt.space import Real, Integer
 try:
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_factrueval2016
+    from neuro_tagger.tokenizer import FactRuEvalTokenizer
 except:
     sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from neuro_tagger.neuro_tagger import NeuroTagger
     from neuro_tagger.dataset_loading import load_dataset_from_factrueval2016
+    from neuro_tagger.tokenizer import FactRuEvalTokenizer
 
 
 def main():
@@ -55,6 +57,10 @@ def main():
     model_type = args.type_of_model
     assert model_type in POSSIBLE_MODEL_TYPES, '`{0}` is unknown model type!'.format(model_type)
 
+    texts_for_testing, token_bounds_for_testing, labels_for_testing, book_names = load_dataset_from_factrueval2016(
+        os.path.join(factrueval_name, 'testset'))
+    print('Data for testing have been loaded...')
+
     if os.path.isfile(model_name):
         with open(model_name, 'rb') as fp:
             model_for_factrueval = pickle.load(fp)
@@ -62,14 +68,16 @@ def main():
             'Classifier for the FactRuEval-2016 cannot be loaded from the file `{0}`.'.format(model_name)
         print('Classifier for the FactRuEval-2016 has been loaded...')
     else:
-        texts_for_training, labels_for_training, _ = load_dataset_from_factrueval2016(
+        texts_for_training, token_bounds_for_training, labels_for_training, _ = load_dataset_from_factrueval2016(
             os.path.join(factrueval_name, 'devset'))
         print('Data for training have been loaded...')
+        tokenizer = FactRuEvalTokenizer(texts_for_training + texts_for_testing,
+                                        token_bounds_for_training + token_bounds_for_testing)
         NeuroTagger.print_info_about_labels(labels_for_training)
         indices_for_cv = NeuroTagger.stratified_kfold(texts_for_training, labels_for_training, cv)
         if model_type == 'crf':
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=False, verbose=2, batch_size=batch_size,
-                              cached=True, n_epochs=1000)
+                              cached=True, n_epochs=1000, tokenizer=tokenizer)
             opt = BayesSearchCV(
                 cls,
                 {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform')},
@@ -81,7 +89,7 @@ def main():
             )
         elif model_type == 'lstm':
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=False, use_lstm=True, verbose=2, batch_size=batch_size,
-                              cached=True, n_epochs=1000)
+                              cached=True, n_epochs=1000, tokenizer=tokenizer)
             opt = BayesSearchCV(
                 cls,
                 {'dropout': Real(0.0, 0.8, prior='uniform'), 'recurrent_dropout': Real(0.0, 0.8, prior='uniform'),
@@ -94,7 +102,7 @@ def main():
             )
         else:
             cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=True, verbose=2, batch_size=batch_size,
-                              cached=True, n_epochs=1000)
+                              cached=True, n_epochs=1000, tokenizer=tokenizer)
             opt = BayesSearchCV(
                 cls,
                 {'l2_kernel': Real(1e-6, 1e+6, prior='log-uniform'), 'l2_chain': Real(1e-6, 1e+6, prior='log-uniform'),
@@ -114,9 +122,6 @@ def main():
         print('Best parameters are: {0}.'.format(opt.best_params_))
         print('Best score is {0:.6f}.'.format(opt.best_score_))
     print('')
-    texts_for_testing, labels_for_testing, book_names = load_dataset_from_factrueval2016(
-        os.path.join(factrueval_name, 'testset'))
-    print('Data for testing have been loaded...')
     NeuroTagger.print_info_about_labels(labels_for_testing)
     predicted_labels = model_for_factrueval.predict(texts_for_testing)
     cur_book_name = ''
