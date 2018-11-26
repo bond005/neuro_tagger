@@ -76,7 +76,7 @@ class FactRuEvalTokenizer(BaseTokenizer):
                 n, len(bounds_of_tokens_in_texts)))
         self.dictionary_of_texts = dict()
         for idx in range(n):
-            self.dictionary_of_texts[texts] = bounds_of_tokens_in_texts[idx]
+            self.dictionary_of_texts[texts[idx]] = [(cur[0], cur[1] - cur[0]) for cur in bounds_of_tokens_in_texts[idx]]
 
     def tokenize(self, source_text: str) -> List[Tuple[int, int]]:
         return self.dictionary_of_texts[source_text]
@@ -90,7 +90,7 @@ class FactRuEvalTokenizer(BaseTokenizer):
     def __deepcopy__(self, memodict={}):
         cls = self.__class__
         result = cls.__new__(cls)
-        result.dictionary_of_texts = copy._deepcopy_method(self.dictionary_of_texts, memodict)
+        result.dictionary_of_texts = copy.deepcopy(self.dictionary_of_texts)
         return result
 
     def __getstate__(self):
