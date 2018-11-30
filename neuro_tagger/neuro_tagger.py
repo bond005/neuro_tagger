@@ -60,7 +60,8 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         self.named_entities_ = self.check_y(y, [len(X[idx]) for idx in range(len(X))], 'y')
         self.update_elmo()
         X_tokenized = self.tokenize(X)
-        self.max_text_len_ = max(map(lambda idx: len(X_tokenized[idx]), range(len(X_tokenized))))
+        lengths = np.array([len(X_tokenized[idx]) for idx in range(len(X_tokenized))], dtype=np.int32)
+        self.max_text_len_ = int(min(lengths.max(), lengths.mean() + 3.0 * lengths.std()))
         if self.verbose:
             print('Maximal length of text is {0}.'.format(self.max_text_len_))
         K.get_session()
@@ -189,7 +190,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         y_true = self.labels_to_y(X, y, X_tokenized, self.max_text_len_)
         y_pred = self.classifier_.predict(self.texts_to_X(X, X_tokenized, self.max_text_len_),
                                           batch_size=self.batch_size)
-        return self.f1_macro(y_true, y_pred, [len(X_tokenized[idx]) for idx in range(len(X_tokenized))])
+        return float(self.f1_macro(y_true, y_pred, [len(X_tokenized[idx]) for idx in range(len(X_tokenized))]))
 
     def tokenize(self, X: Union[list, tuple, np.ndarray]) -> List[tuple]:
         return [tuple(self.tokenizer.tokenize(X[idx])) for idx in range(len(X))]
@@ -521,7 +522,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
         for text_idx in range(1, len(lengths_of_texts)):
             y_true_ = np.concatenate((y_true_, np.argmax(y_true[text_idx], axis=-1)[0:lengths_of_texts[text_idx]]))
             y_pred_ = np.vstack((y_pred_, y_pred[text_idx][0:lengths_of_texts[text_idx]]))
-        return log_loss(y_true_, y_pred_)
+        return float(log_loss(y_true_, y_pred_))
 
     @staticmethod
     def f1_macro(y_true: np.ndarray, y_pred: np.ndarray, lengths_of_texts: List[int]) -> float:
@@ -553,7 +554,7 @@ class NeuroTagger(ClassifierMixin, BaseEstimator):
                 n += 1
         if n == 0:
             return 0.0
-        return f1 / float(n)
+        return float(f1) / float(n)
 
     @staticmethod
     def generate_batches(X: np.ndarray, y: Union[np.ndarray, None], batch_size: int, shuffle: bool=True):

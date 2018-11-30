@@ -173,7 +173,7 @@ def main():
                               l2_chain=config[1][4])
         f1 = cross_val_score(cls, X=texts, y=labels, cv=indices_for_cv, n_jobs=1)
         print('')
-        print('F1-score is {0:.6f}.'.format(f1))
+        print('F1-score is {0:.6f} +- {1:.6f}.'.format(f1.mean(), f1.std()))
         return
     cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=False, verbose=True, batch_size=batch_size,
                       cached=True, n_epochs=1000, tokenizer=DefaultTokenizer())
