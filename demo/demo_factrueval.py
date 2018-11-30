@@ -19,7 +19,7 @@ except:
 
 
 def main():
-    POSSIBLE_MODEL_TYPES = {'crf', 'lstm', 'lstm-crf'}
+    POSSIBLE_MODEL_TYPES = {'crf', 'lstm', 'lstm-crf', 'true'}
     parser = ArgumentParser()
     parser.add_argument('-m', '--model', dest='model_name', type=str, required=True,
                         help='The binary file with the best neural network model.')
@@ -35,7 +35,7 @@ def main():
                         help='Size of mini-batch.')
     parser.add_argument('--elmo', dest='elmo_name', type=str, required=True, help='The ELMo model name.')
     parser.add_argument('--type', dest='type_of_model', type=str, required=False, default='crf',
-                        help='The type of model (crf, lstm or lstm-crf).')
+                        help='The type of model (crf, lstm, lstm-crf or true).')
     args = parser.parse_args()
 
     model_name = os.path.join(args.model_name)
@@ -60,6 +60,9 @@ def main():
     texts_for_testing, token_bounds_for_testing, labels_for_testing, book_names = load_dataset_from_factrueval2016(
         os.path.join(factrueval_name, 'testset'))
     print('Data for testing have been loaded...')
+
+    if model_type == 'true':
+        pass
 
     if os.path.isfile(model_name):
         with open(model_name, 'rb') as fp:

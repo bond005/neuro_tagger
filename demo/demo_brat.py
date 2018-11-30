@@ -7,7 +7,7 @@ import sys
 from typing import Union, Tuple
 
 import numpy as np
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_predict
 from skopt import BayesSearchCV
 from skopt.space import Real, Integer
 
@@ -104,6 +104,68 @@ def parse_config(file_name: str) -> Tuple[str, Union[Tuple[float, float], Tuple[
     return ner_type, (n_units, dropout, recurrent_dropout, l2_kernel, l2_chain)
 
 
+def quality_report(texts: Union[list, tuple, np.ndarray], true_labels: Union[list, tuple, np.ndarray],
+                   predicted_labels: Union[list, tuple, np.ndarray]):
+    all_named_entities = set()
+    n_samples = len(texts)
+    for text_idx in range(n_samples):
+        for cur_label in true_labels[text_idx]:
+            all_named_entities.add(cur_label[0])
+        for cur_label in predicted_labels[text_idx]:
+            all_named_entities.add(cur_label[0])
+    all_named_entities = sorted(list(all_named_entities))
+    tp = dict()
+    fp = dict()
+    fn = dict()
+    for ne_type in all_named_entities:
+        for text_idx in range(n_samples):
+            true_ = np.zeros((len(texts[text_idx]),), dtype=np.uint8)
+            predicted_ = np.zeros((len(texts[text_idx]),), dtype=np.uint8)
+            for cur_label in filter(lambda it: it[0] == ne_type, true_labels[text_idx]):
+                for char_idx in range(cur_label[1], cur_label[2]):
+                    true_[char_idx] = 1
+            for cur_label in filter(lambda it: it[0] == ne_type, predicted_labels[text_idx]):
+                for char_idx in range(cur_label[1], cur_label[2]):
+                    predicted_[char_idx] = 1
+            for char_idx in range(len(texts[text_idx])):
+                if (true_[char_idx] > 0) and (predicted_[char_idx] > 0):
+                    tp[ne_type] = tp.get(ne_type, 0) + 1
+                elif (true_[char_idx] > 0) and (predicted_[char_idx] == 0):
+                    fn[ne_type] = fn.get(ne_type, 0) + 1
+                elif (true_[char_idx] == 0) and (predicted_[char_idx] > 0):
+                    fp[ne_type] = fp.get(ne_type, 0) + 1
+            del true_, predicted_
+    f1 = np.zeros((len(all_named_entities),), dtype=np.float32)
+    idx = 0
+    tp_total = 0
+    fp_total = 0
+    fn_total = 0
+    ne_width = 0
+    for ne_type in all_named_entities:
+        if (ne_type in tp) and (tp[ne_type] > 0):
+            precision = tp[ne_type] / float(tp[ne_type] + fp.get(ne_type, 0))
+            recall = tp[ne_type] / float(tp[ne_type] + fn.get(ne_type, 0))
+            f1[idx] = 2.0 * precision * recall / (precision + recall)
+        else:
+            f1[idx] = 0.0
+        tp_total += tp.get(ne_type, 0)
+        fp_total += fp.get(ne_type, 0)
+        fn_total += fn.get(ne_type, 0)
+        if len(ne_type) > ne_width:
+            ne_width = len(ne_type)
+    if tp_total > 0:
+        precision = tp_total / float(tp_total + fp_total)
+        recall = tp_total / float(tp_total + fn_total)
+        f1_micro = 2.0 * precision * recall / (precision + recall)
+    else:
+        f1_micro = 0.0
+    print('F1-macro is {0:.6f}.'.format(f1.mean()))
+    print('F1-micro is {0:.6f}.'.format(f1_micro))
+    print('F1 by entities:')
+    for idx in range(len(all_named_entities)):
+        print('  {0:<{1}} {2:.6f};'.format(all_named_entities[idx], ne_width, f1[idx]))
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('-m', '--model', dest='model_name', type=str, required=True,
@@ -171,9 +233,10 @@ def main():
                               cached=True, n_epochs=1000, tokenizer=DefaultTokenizer(), n_units=config[1][0],
                               dropout=config[1][1], recurrent_dropout=config[1][2], l2_kernel=config[1][3],
                               l2_chain=config[1][4])
-        f1 = cross_val_score(cls, X=texts, y=labels, cv=indices_for_cv, n_jobs=1)
-        print('')
-        print('F1-score is {0:.6f} +- {1:.6f}.'.format(f1.mean(), f1.std()))
+        predicted_labels = cross_val_predict(cls, X=texts, y=labels, cv=indices_for_cv, n_jobs=1)
+        quality_report(texts, labels, predicted_labels)
+        with open(model_name, 'wb') as fp:
+            pickle.dump(cls, fp)
         return
     cls = NeuroTagger(elmo_name=elmo_name, use_crf=True, use_lstm=False, verbose=True, batch_size=batch_size,
                       cached=True, n_epochs=1000, tokenizer=DefaultTokenizer())
