@@ -110,9 +110,9 @@ def quality_report(texts: Union[list, tuple, np.ndarray], true_labels: Union[lis
     n_samples = len(texts)
     for text_idx in range(n_samples):
         for cur_label in true_labels[text_idx]:
-            all_named_entities.add(cur_label[0])
+            all_named_entities.add(cur_label[0].upper())
         for cur_label in predicted_labels[text_idx]:
-            all_named_entities.add(cur_label[0])
+            all_named_entities.add(cur_label[0].upper())
     all_named_entities = sorted(list(all_named_entities))
     tp = dict()
     fp = dict()
@@ -121,10 +121,10 @@ def quality_report(texts: Union[list, tuple, np.ndarray], true_labels: Union[lis
         for text_idx in range(n_samples):
             true_ = np.zeros((len(texts[text_idx]),), dtype=np.uint8)
             predicted_ = np.zeros((len(texts[text_idx]),), dtype=np.uint8)
-            for cur_label in filter(lambda it: it[0] == ne_type, true_labels[text_idx]):
+            for cur_label in filter(lambda it: it[0].upper() == ne_type, true_labels[text_idx]):
                 for char_idx in range(cur_label[1], cur_label[2]):
                     true_[char_idx] = 1
-            for cur_label in filter(lambda it: it[0] == ne_type, predicted_labels[text_idx]):
+            for cur_label in filter(lambda it: it[0].upper() == ne_type, predicted_labels[text_idx]):
                 for char_idx in range(cur_label[1], cur_label[2]):
                     predicted_[char_idx] = 1
             for char_idx in range(len(texts[text_idx])):
